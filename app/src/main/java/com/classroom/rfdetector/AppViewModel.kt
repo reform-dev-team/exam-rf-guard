@@ -102,6 +102,8 @@ class AppViewModel(private val app: Context) : ViewModel() {
     private var refreshJob: Job? = null
 
     init {
+        // 무음 상태에서 프로세스가 죽었다면 기록이 남아 있다. 새 프로세스에는 돌고 있는 감시가 없으니 지금 되돌린다.
+        silent.off()
         scope.launch {
             identityResolver = withContext(Dispatchers.IO) {
                 fun rows(file: String) = app.assets.open(file).bufferedReader().useLines { lines ->
