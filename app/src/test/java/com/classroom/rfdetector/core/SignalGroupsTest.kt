@@ -11,7 +11,7 @@ class SignalGroupsTest {
         tracker.update(RfObservation(address, ScanSource.BLE, name, rssi, null, false, atMs, ids, hints))
 
     private fun wifi(address: String, atMs: Long, name: String?, rssi: Int = -60) =
-        tracker.update(RfObservation(address, ScanSource.WIFI, name, rssi, null, name == null, atMs))
+        tracker.update(RfObservation(address, ScanSource.WIFI, name, rssi, null, name == null, atMs, hints = wifiHints(name)))
 
     private fun baselineAt(nowMs: Long) = baselineGroupCounts(
         SignalSnapshot.capture("A", nowMs, false, tracker.snapshot(nowMs, includeInactive = true)))
@@ -114,6 +114,38 @@ class SignalGroupsTest {
         // 나중에 다른 숨김 핫스팟이 켜지면 그것은 알린다.
         wifi("3e:55:01:9a:20:7f", 150_000, null, rssi = -52)
         assertEquals("3e:55:01:9a:20:7f", now(151_000, acknowledged).wifi.single().devices.single().key)
+    }
+
+    @Test fun anotherPhoneWithADefaultHotspotNameAlreadyInTheEmptyRoomIsFlagged() {
+        wifi("10:00:00:00:00:01", 0, "SCHOOL")
+        wifi("7a:10:22:c4:9b:05", 0, "iPhone", rssi = -70)
+        val snapshot = SignalSnapshot.capture("A", 1_000, false, tracker.snapshot(1_000, includeInactive = true))
+        val baseline = baselineGroupCounts(snapshot)
+        val routers = baselineWifiAddresses(snapshot)
+        fun now(nowMs: Long, acknowledged: Set<String> = emptySet()) =
+            watchView(tracker.snapshot(nowMs, includeInactive = true), baseline, acknowledged, nowMs, routers)
+
+        // 빈 교실에 있던 그 "iPhone"과, 이름이 같은 학교 공유기의 다른 주소는 원래 있던 것이다.
+        wifi("7a:10:22:c4:9b:05", 100_000, "iPhone", rssi = -70); wifi("10:00:00:00:00:03", 100_000, "SCHOOL")
+        assertEquals(0, now(101_000).count)
+
+        // 다른 휴대폰이 같은 기본 이름으로 핫스팟을 켜면 주소가 다르므로 바로 알린다.
+        wifi("c2:5d:88:31:0e:f4", 130_000, "iPhone", rssi = -50)
+        val flagged = now(131_000).wifi.single()
+        assertEquals(listOf("c2:5d:88:31:0e:f4"), flagged.devices.map { it.key })
+        assertEquals(0, flagged.baselineCount)
+        assertTrue(flagged.alert)
+        // 새로 알린 주소는 "원래 있던 전파"의 같은 이름 줄에 섞이지 않는다.
+        wifi("7a:10:22:c4:9b:05", 130_000, "iPhone", rssi = -70)
+        val knownRow = watchView(tracker.snapshot(131_000, includeInactive = true), baseline, emptySet(), 131_000, routers, baselineSamples(snapshot))
+            .knownGroups.single { it.key == "WIFI:name:iphone" }
+        assertEquals(listOf("7a:10:22:c4:9b:05"), knownRow.live.map { it.key })
+
+        // 확인함은 그 주소에만 적용된다. 같은 이름의 또 다른 핫스팟은 다시 알린다.
+        val acknowledged = setOf(flagged.strongest.acknowledgeKey)
+        assertEquals(0, now(131_000, acknowledged).count)
+        wifi("c2:5d:88:31:0e:f4", 160_000, "iPhone", rssi = -50); wifi("e6:91:0b:7c:44:a8", 160_000, "iPhone", rssi = -55)
+        assertEquals(listOf("e6:91:0b:7c:44:a8"), now(161_000, acknowledged).wifi.single().devices.map { it.key })
     }
 
     @Test fun hiddenNetworkFromARouterAlreadyInTheEmptyRoomIsNotNew() {

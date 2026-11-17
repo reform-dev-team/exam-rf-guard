@@ -257,7 +257,8 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
     val live = device.presence != SignalPresence.HISTORY
     val accent = if (live) classAccent(device.distanceClass) else RfColors.textDim
     // 새 전파로 올라온 것만 "확인함"으로 뺄 수 있다. 원래 있던 전파는 뺄 목록이 없다.
-    val flagged = (watch.wifi + watch.bluetooth + watch.far).any { it.key == device.groupKey }
+    // 주소로 비교하는 와이파이는 같은 이름의 묶음에 원래 있던 주소도 있으므로 묶음 키가 아니라 주소로 확인한다.
+    val flagged = (watch.wifi + watch.bluetooth + watch.far).any { group -> group.devices.any { it.trackingKey == device.trackingKey } }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
