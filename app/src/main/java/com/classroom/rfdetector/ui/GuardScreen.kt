@@ -1,5 +1,6 @@
 package com.classroom.rfdetector.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.classroom.rfdetector.AppViewModel
 import com.classroom.rfdetector.BuildConfig
 import com.classroom.rfdetector.RadioProblem
+import com.classroom.rfdetector.core.acknowledgeKey
 import com.classroom.rfdetector.core.*
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -94,6 +96,8 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
         SetupFlow(missing, vm::checkExamMode, onRequestPermissions, onOpenSettings)
         return
     }
+    // 측정·감시 중 뒤로 가기는 Android 11 이하에서 앱을 닫아, 확인 없이 측정·감시가 끝난다. 끝내기 버튼처럼 먼저 묻는다.
+    BackHandler(enabled = scanning) { confirmStop = true }
 
     Column(Modifier.fillMaxSize()) {
         GuardSteps(phase)
@@ -248,7 +252,11 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
         text = { Text("지금의 빈 교실 기록과 목록을 비우고 2분 측정부터 다시 합니다.\n\n수험생이 있는 상태에서 다시 측정하면 수험생의 기기가 원래 있던 전파로 기록되어, 이후에는 알리지 않습니다.") },
         confirmButton = { TextButton(onClick = { confirmRestart = false; if (blocked) { vm.stopScan(); vm.resetBaseline() } else vm.restartFromEmptyRoom() }) { Text("다시 측정") } },
         dismissButton = { TextButton(onClick = { confirmRestart = false }) { Text("취소") } })
-    if (confirmStop) AlertDialog(onDismissRequest = { confirmStop = false }, title = { Text("감시를 끝낼까요?") },
+    if (confirmStop && phase == GuardPhase.COLLECT) AlertDialog(onDismissRequest = { confirmStop = false }, title = { Text("측정을 그만둘까요?") },
+        text = { Text("지금까지 모은 빈 교실 전파는 저장되지 않습니다.") },
+        confirmButton = { TextButton(onClick = { confirmStop = false; vm.stopScan() }) { Text("그만두기") } },
+        dismissButton = { TextButton(onClick = { confirmStop = false }) { Text("계속 측정") } })
+    else if (confirmStop) AlertDialog(onDismissRequest = { confirmStop = false }, title = { Text("감시를 끝낼까요?") },
         text = { Text("끝내면 전파를 더 받지 않습니다. 빈 교실 기록은 남아 있어 같은 기록으로 다시 감시할 수 있습니다.") },
         confirmButton = { TextButton(onClick = { confirmStop = false; vm.stopScan() }) { Text("끝내기") } },
         dismissButton = { TextButton(onClick = { confirmStop = false }) { Text("계속 감시") } })
@@ -310,7 +318,7 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
         }
         Surface(color = RfColors.surface) {
             Row(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (flagged) OutlinedButton(onClick = { vm.acknowledge(device.groupKey); close() }, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = RoundedCornerShape(16.dp)) { Text("확인함\n목록에서 빼기") }
+                if (flagged) OutlinedButton(onClick = { vm.acknowledge(device.acknowledgeKey); close() }, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = RoundedCornerShape(16.dp)) { Text("확인함\n목록에서 빼기") }
                 Button(onClick = close, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = RfColors.surfaceAlt, contentColor = RfColors.textPrimary)) { Text("목록으로", fontWeight = FontWeight.Bold) }
             }

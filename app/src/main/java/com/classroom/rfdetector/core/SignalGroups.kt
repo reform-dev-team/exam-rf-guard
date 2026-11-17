@@ -5,6 +5,9 @@ import java.util.Locale
 /** 새 주소가 이 시간 넘게 이어져야 "늘어났다"고 본다. 주소가 바뀌는 순간 옛 주소와 겹치는 것을 거른다. */
 const val ESTABLISHED_MS = 30_000L
 
+/** 이름을 숨긴 와이파이 전부가 공유하는 묶음 키. 이름이 같은 것이 아니므로 이름처럼 "원래 있던 것"으로 보면 안 된다. */
+const val HIDDEN_WIFI_KEY = "WIFI:hidden"
+
 /**
  * 주소 대신 쓰는 묶음 기준. 블루투스 주소는 10~15분마다 바뀌므로 기기가 알린 이름,
  * 이름이 없으면 회사 코드와 종류 단서로 묶는다. 와이파이는 이름으로 묶는다.
@@ -13,7 +16,7 @@ fun signalGroupKey(source: ScanSource, address: String, name: String, manufactur
     val advertised = advertisedName(address, name)
     return when {
         advertised != null -> "${source.name}:name:${advertised.lowercase(Locale.ROOT)}"
-        source == ScanSource.WIFI -> "WIFI:hidden"
+        source == ScanSource.WIFI -> HIDDEN_WIFI_KEY
         manufacturerIds.isEmpty() && hints.isEmpty() -> "BLE:unknown"
         else -> "BLE:kind:${manufacturerIds.sorted().joinToString(",")}:${hints.primary?.name.orEmpty()}"
     }
@@ -26,6 +29,14 @@ fun advertisedName(address: String, name: String): String? {
 }
 
 val TrackedDevice.groupKey: String get() = signalGroupKey(source, key, displayName, manufacturerIds, hints)
+
+/**
+ * "확인함"으로 목록에서 뺄 때 쓰는 키. 보통은 묶음 키지만, 이름 숨김 와이파이는 서로 다른 기기가 한 묶음에 모이므로
+ * 주소마다 따로 뺀다. 묶음째 빼면 숨김 와이파이 하나를 확인한 뒤 새로 켜진 다른 숨김 핫스팟까지 알리지 않게 된다.
+ */
+val TrackedDevice.acknowledgeKey: String get() = groupKey.let { group ->
+    if (group == HIDDEN_WIFI_KEY) "$HIDDEN_WIFI_KEY:${key.uppercase(Locale.ROOT)}" else group
+}
 val SnapshotSignal.groupKey: String get() = signalGroupKey(source, address, name, manufacturerIds, hints)
 
 /** 빈 교실 기록에서 묶음마다 동시에 몇 개였는지. 저장 순간 잡히지 않던 묶음은 1개로 친다. */
@@ -70,6 +81,7 @@ fun baselineWifiAddresses(baseline: SignalSnapshot): Set<String> =
  */
 fun isSameAccessPoint(address: String, baselineWifi: Set<String>): Boolean {
     val candidate = address.uppercase(Locale.ROOT)
+    if (candidate in baselineWifi) return true
     if (candidate.length != 17) return false
     return baselineWifi.any { known -> known.length == 17 && (known.substring(3) == candidate.substring(3) || known.dropLast(2) == candidate.dropLast(2)) }
 }
@@ -81,6 +93,8 @@ fun watchView(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowle
     val (findMy, others) = live.partition { it.source == ScanSource.BLE && it.hints.primary == SignalHint.APPLE_FIND_MY }
     // 이름을 숨긴 것까지 포함해, 빈 교실에 있던 공유기가 뒤늦게 내보인 다른 주소는 원래 있던 것이다.
     val rest = others.filterNot { it.source == ScanSource.WIFI && isSameAccessPoint(it.key, baselineWifi) }
+        // 확인함으로 뺀 이름 숨김 와이파이는 그 주소만 뺀다.
+        .filterNot { it.groupKey == HIDDEN_WIFI_KEY && it.acknowledgeKey in acknowledged }
     val flagged = mutableListOf<SignalGroup>()
     rest.groupBy { it.groupKey }.forEach { (key, members) ->
         val sorted = members.sortedByDescending { it.rssiEma ?: Double.NEGATIVE_INFINITY }
@@ -91,6 +105,9 @@ fun watchView(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowle
             key in acknowledged -> null
             // 빈 교실에 없던 묶음은 바로 보인다. 와이파이 주소는 바뀌지 않으므로 바로 알린다.
             before == 0 -> SignalGroup(key, sorted, 0, alert = wifi || established > 0)
+            // 이름을 숨긴 와이파이는 이름이 같다는 근거가 없다. 빈 교실 공유기의 주소는 위에서 이미 걸렀으므로
+            // 남은 것은 모두 새 전파다. 주소가 바뀌지 않으므로 바로 알린다.
+            wifi && key == HIDDEN_WIFI_KEY -> SignalGroup(key, sorted, 0, alert = true)
             // 같은 이름의 와이파이는 주소가 몇 개든 원래 있던 것이다.
             wifi -> null
             established > before -> SignalGroup(key, sorted, before, alert = true)
@@ -123,7 +140,7 @@ private fun knownGroups(devices: List<TrackedDevice>, baseline: Map<String, Int>
     }
     val fromEmptyRoom = samples.map { row(it.groupKey, it) }
     val recorded = samples.map { it.groupKey }.toSet()
-    val later = members.filter { (key, all) -> key !in recorded && (key in acknowledged || all.any { it.source == ScanSource.WIFI && isSameAccessPoint(it.key, baselineWifi) }) }
+    val later = members.filter { (key, all) -> key !in recorded && (key in acknowledged || all.any { it.acknowledgeKey in acknowledged } || all.any { it.source == ScanSource.WIFI && isSameAccessPoint(it.key, baselineWifi) }) }
         .entries.sortedWith(compareBy({ entry -> entry.value.minOf { it.firstSeenMs } }, { it.key })).map { row(it.key, null) }
     return fromEmptyRoom + later
 }

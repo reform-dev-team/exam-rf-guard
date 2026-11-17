@@ -75,6 +75,28 @@ class GuardFlowTest {
         } finally { vm.shutdown() }
     }
 
+    @Test fun backDuringMeasuringOrWatchingAsksBeforeStopping() {
+        val vm = launch()
+        try {
+            compose.onNodeWithText("빈 교실 측정 시작").performClick()
+            compose.waitUntil(10_000) { vm.devices.value.isNotEmpty() }
+            // Android 11 이하에서는 뒤로 가기가 앱을 닫아 측정·감시가 확인 없이 끝난다.
+            compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
+            compose.onNodeWithText("측정을 그만둘까요?").assertExists()
+            compose.onNodeWithText("계속 측정").performClick()
+            assertTrue(vm.scanning.value)
+
+            compose.waitUntil(10_000) { vm.devices.value.size == 5 }
+            compose.onNodeWithText("빈 교실 기록 저장").performClick()
+            waitForText("새 전파 없음")
+            compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
+            compose.onNodeWithText("감시를 끝낼까요?").assertExists()
+            compose.onNodeWithText("계속 감시").performClick()
+            assertTrue(vm.scanning.value)
+            assertTrue(!compose.activity.isFinishing)
+        } finally { vm.shutdown() }
+    }
+
     @Test fun confirmedSignalLeavesTheListAndLeavingTheAppKeepsWatching() {
         val vm = launch()
         try {

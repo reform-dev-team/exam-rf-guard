@@ -152,9 +152,15 @@ APK는 `app/build/outputs/apk/debug/app-debug.apk`에 생깁니다. 구조와 �
 
 코드 기여는 저장소를 포크한 뒤 `main`을 대상으로 Pull Request를 보내 주세요. PR마다 단위 테스트·빌드·Lint가 자동으로 돌고, 통과한 뒤 관리자가 검토해 머지합니다. 절차와 PR 기준은 [CONTRIBUTING.md](CONTRIBUTING.md)에 있습니다.
 
+**PR에는 실제로 테스트한 결과를 최대한 함께 담아 주세요.** 코드만 고친 PR도 좋지만, 관리자가 직접 돌려 보며 확인해야 해서 검토에 시간이 오래 걸립니다. 실기기에서 실행해 확인할 수 있는 변경이라면 그렇게 확인한 PR이 가장 좋습니다. 에뮬레이터는 실제 전파를 받지 못하므로 실기기(실제 Android 휴대폰)로 테스트해 주세요.
+
+- 무엇을 어떤 휴대폰에서 해 봤고 어떤 결과가 나왔는지 PR 본문에 적습니다. 휴대폰 모델, Android 버전, 누른 순서, 화면 캡처나 로그가 있으면 됩니다.
+- 확인하지 못한 부분은 확인하지 못했다고 적습니다.
+- Claude 같은 AI 도구로 이 저장소를 분석하거나 PR을 만들 때도 같습니다. 코드를 고치는 데서 끝내지 말고, 실행해서 확인할 수 있는 것은 실기기에서 실제로 실행해 그 결과를 PR에 담아 주세요.
+
 ## 출처
 
-제조사 정보는 앱에 포함한 공개 등록부(2026년 11월 16일 수집)를 씁니다. 실시간 조회가 아닙니다.
+제조사 정보는 앱에 포함한 공개 등록부(2026년 11월 16일 미국 동부 / 17일 한국 시각 수집)를 씁니다. 실시간 조회가 아닙니다.
 
 - [IEEE OUI 등록부](https://standards-oui.ieee.org/oui/oui.csv)
 - [Bluetooth SIG 회사 식별자](https://www.bluetooth.com/specifications/assigned-numbers/)
@@ -180,4 +186,4 @@ The development build also runs Bluetooth general discovery followed by Wi-Fi Di
 
 Records stay on the phone; the app declares no internet permission. The UI and the rest of this document are in Korean. Licensed under Apache-2.0; see [NOTICE](NOTICE) for the icon and bundled registry data.
 
-Contributions are welcome through a fork and a pull request against `main`; CI must pass and a maintainer reviews before merging. See [CONTRIBUTING.md](CONTRIBUTING.md) (in Korean).
+Contributions are welcome through a fork and a pull request against `main`; CI must pass and a maintainer reviews before merging. Please include the results of testing on a real device (not an emulator) in the PR whenever the change can be checked by running the app: code-only PRs are welcome but take much longer to review. See [CONTRIBUTING.md](CONTRIBUTING.md) (in Korean).
