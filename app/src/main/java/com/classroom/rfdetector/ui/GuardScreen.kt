@@ -30,6 +30,8 @@ import com.classroom.rfdetector.RadioProblem
 import com.classroom.rfdetector.core.acknowledgeKey
 import com.classroom.rfdetector.core.*
 import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
 
@@ -40,6 +42,26 @@ private val okDim = Color(0xFF12301F)
 private val warnDim = Color(0xFF3A2910)
 
 private fun clock(timeMs: Long): String = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timeMs))
+
+/**
+ * 저장한 빈 교실 기록이 언제 것인지. 오늘 것이 아니면 날짜를 함께 보여 준다.
+ * 시각만 보이면 어제나 지난 시험에서 저장한 기록을 방금 저장한 것으로 알고 감시에 쓰게 된다.
+ */
+internal fun savedRecordTime(capturedAtMs: Long, nowMs: Long, zone: ZoneId = ZoneId.systemDefault()): String {
+    val captured = Instant.ofEpochMilli(capturedAtMs).atZone(zone)
+    val today = Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate()
+    val time = String.format(Locale.ROOT, "%02d:%02d", captured.hour, captured.minute)
+    return when {
+        captured.toLocalDate() == today -> time
+        captured.toLocalDate() == today.minusDays(1) -> "어제 $time"
+        captured.year == today.year -> "${captured.monthValue}월 ${captured.dayOfMonth}일 $time"
+        else -> "${captured.year}년 ${captured.monthValue}월 ${captured.dayOfMonth}일 $time"
+    }
+}
+
+internal fun savedRecordIsFromToday(capturedAtMs: Long, nowMs: Long, zone: ZoneId = ZoneId.systemDefault()): Boolean =
+    Instant.ofEpochMilli(capturedAtMs).atZone(zone).toLocalDate() == Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate()
+
 private fun minSec(seconds: Int) = if (seconds >= 60) "${seconds / 60}분 ${seconds % 60}초" else "${seconds}초"
 
 /**
@@ -119,8 +141,12 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                     saved?.let { record ->
                         item {
                             OutlinedButton(onClick = { vm.useSavedBaseline(); onStart() }, modifier = Modifier.fillMaxWidth()) {
-                                Text("${clock(record.capturedAtMs)}에 저장한 기록으로 바로 감시")
+                                Text("${savedRecordTime(record.capturedAtMs, System.currentTimeMillis())}에 저장한 기록으로 바로 감시")
                             }
+                        }
+                        item {
+                            if (savedRecordIsFromToday(record.capturedAtMs, System.currentTimeMillis())) Text("이 교실에서 저장한 기록일 때만 쓰세요.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
+                            else Text("오늘 저장한 기록이 아닙니다. 그때와 교실이나 주변 전파가 달라졌으면 새 전파를 놓치거나 잘못 알립니다. 빈 교실부터 새로 측정하세요.", color = RfColors.warning, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }

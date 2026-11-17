@@ -14,6 +14,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import com.classroom.rfdetector.App
 import com.classroom.rfdetector.AppViewModel
+import com.classroom.rfdetector.core.SignalSnapshot
 import java.io.File
 import java.time.Duration
 import org.junit.Assert.assertEquals
@@ -49,6 +50,20 @@ class GuardFlowTest {
     private fun addEarbuds(vm: AppViewModel) {
         compose.runOnIdle { vm.simAddDevice(); shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1)) }
         waitForText("새 전파 1개 발견")
+    }
+
+    @Test fun savedRecordFromAnotherDayShowsItsDateAndAWarning() {
+        val vm = launch()
+        try {
+            val now = System.currentTimeMillis()
+            compose.runOnIdle { vm.savedBaseline.value = SignalSnapshot("시험실", now - Duration.ofDays(1).toMillis(), false, emptyList()) }
+            compose.onNodeWithText("어제 ", substring = true).assertExists()
+            compose.onNodeWithText("오늘 저장한 기록이 아닙니다", substring = true).assertExists()
+            saveScreen("guard-saved-yesterday")
+            compose.runOnIdle { vm.savedBaseline.value = SignalSnapshot("시험실", now, false, emptyList()) }
+            compose.onNodeWithText("이 교실에서 저장한 기록일 때만 쓰세요.").assertExists()
+            compose.onNodeWithText("오늘 저장한 기록이 아닙니다", substring = true).assertDoesNotExist()
+        } finally { vm.shutdown() }
     }
 
     @Test fun proctorRecordsEmptyRoomThenSeesAndLocatesNewSignal() {
