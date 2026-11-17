@@ -99,7 +99,8 @@ fun watchView(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowle
         if (group != null) flagged += group
     }
     val byStrength = compareByDescending<SignalGroup> { it.strongest.rssiEma ?: Double.NEGATIVE_INFINITY }
-    val (far, near) = flagged.sortedWith(byStrength).partition { (it.strongest.rssiEma ?: -127.0) < WEAK_SIGNAL_DBM }
+    // 가장 셀 때도 약했던 묶음만 따로 모은다. 지금 세기로 나누면 가리거나 감독관이 멀어지기만 해도 새 전파에서 빠진다.
+    val (far, near) = flagged.sortedWith(byStrength).partition { group -> group.devices.maxOf { it.peakRssi ?: -127 } < WEAK_SIGNAL_DBM }
     return WatchView(
         wifi = near.filter { it.strongest.source == ScanSource.WIFI },
         bluetooth = near.filter { it.strongest.source != ScanSource.WIFI },

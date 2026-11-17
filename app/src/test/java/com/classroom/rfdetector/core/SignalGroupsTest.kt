@@ -146,4 +146,17 @@ class SignalGroupsTest {
         assertEquals("BLE:name:far watch", result.far.single().key)
         assertEquals(0, result.count)
     }
+
+    @Test fun aNewSignalThatWeakensWhileStillReceivedStaysCounted() {
+        val baseline = baselineAt(1_000)
+        // 감독관 옆에서 세게 잡히던 새 이어폰.
+        for (s in 0..60) ble("EE:00:00:00:00:01", 100_000L + s * 1_000, name = "Galaxy Buds2", rssi = -60, ids = setOf(117), hints = setOf(SignalHint.EARPHONES))
+        assertEquals(1, view(baseline, 160_500).count)
+        // 계속 잡히지만 가방에 넣었거나 감독관이 교탁으로 돌아가 약해졌다. 가장 셀 때는 −60 dBm이었으므로 그대로 센다.
+        for (s in 61..70) ble("EE:00:00:00:00:01", 100_000L + s * 1_000, name = "Galaxy Buds2", rssi = -95, ids = setOf(117), hints = setOf(SignalHint.EARPHONES))
+        val weakened = view(baseline, 170_500)
+        assertTrue((weakened.bluetooth + weakened.far).single().strongest.rssiEma!! < WEAK_SIGNAL_DBM)
+        assertEquals(1, weakened.count)
+        assertTrue(weakened.far.isEmpty())
+    }
 }
