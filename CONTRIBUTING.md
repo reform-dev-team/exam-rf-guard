@@ -1,0 +1,35 @@
+# 기여 안내
+
+KoriyoSCAN에 관심을 가져 주셔서 감사합니다. 코드 수정뿐 아니라 실기기에서 써 본 결과를 알려 주는 것도 큰 도움이 됩니다.
+
+## 제보
+
+실기기 관측 결과와 버그는 [Issues](https://github.com/reform-dev-team/exam-rf-guard/issues)에 올려 주세요. 적을 내용은 [README의 제보](README.md#제보)에 있습니다. 화면이나 기록을 첨부할 때는 이름·주소·장소를 가려 주세요.
+
+## 코드 기여
+
+1. 저장소를 포크하고 `main`에서 브랜치를 만듭니다.
+2. 고친 뒤 아래 명령이 통과하는지 확인합니다. 빌드 환경과 코드 구조는 [docs/DEVELOPMENT.ko.md](docs/DEVELOPMENT.ko.md)에 있습니다.
+
+   ```shell
+   ./gradlew testDebugUnitTest assembleDebug lintDebug
+   ```
+
+3. `main`을 대상으로 Pull Request를 엽니다. 같은 명령이 CI에서 자동으로 돌고, 통과해야 머지할 수 있습니다. 처음 기여하는 분의 PR은 관리자가 승인해야 CI가 시작됩니다.
+4. 관리자가 검토한 뒤 머지합니다. `main`에는 직접 push할 수 없습니다.
+
+큰 변경은 먼저 이슈로 방향을 이야기해 주세요. 탐지 규칙을 바꾸는 변경은 특히 그렇습니다.
+
+## PR 기준
+
+- 한 PR에는 한 가지 변경만 담습니다. 작을수록 검토가 빠릅니다.
+- 동작을 바꾸면 테스트를 함께 고치거나 추가합니다.
+- 사용자에게 보이는 변경은 [CHANGELOG.md](CHANGELOG.md)에, 탐지 범위나 한계가 달라지면 [README](README.md)에도 반영합니다.
+- 앱이 실제로 하는 것보다 많이 탐지한다고 읽히는 문구는 받지 않습니다. 검증하지 않은 것은 검증하지 않았다고 적습니다.
+- 인터넷 권한을 추가하는 변경은 받지 않습니다. 기록은 휴대폰 밖으로 나가지 않아야 합니다.
+- `local.properties`, 서명 키, 실제 현장에서 받은 기록은 올리지 않습니다.
+- 커밋 메시지는 영어로, 무엇을 바꿨는지 한 문장으로 적습니다. 예: `Guide setup step by step before measuring`
+
+## 라이선스
+
+기여한 내용은 저장소와 같은 [Apache License 2.0](LICENSE)으로 공개됩니다.
