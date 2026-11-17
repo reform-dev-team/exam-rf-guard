@@ -77,7 +77,7 @@ class SignalGroupsTest {
         wifi("10:00:00:00:00:03", 100_000, "SCHOOL"); wifi("10:00:00:00:00:04", 100_000, null); wifi("10:00:00:00:00:01", 100_000, "SCHOOL")
         fun now(nowMs: Long) = watchView(tracker.snapshot(nowMs, includeInactive = true), baseline, emptySet(), nowMs, baselineWifiAddresses(snapshot))
         assertEquals(0, now(101_000).count)
-        wifi("20:00:00:00:00:01", 130_000, "Galaxy S24 1234", rssi = -55)
+        wifi("20:11:22:33:44:55", 130_000, "Galaxy S24 1234", rssi = -55)
         val hotspot = now(131_000).wifi.single()
         assertTrue(hotspot.alert)
         assertEquals(0, hotspot.baselineCount)

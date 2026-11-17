@@ -73,6 +73,7 @@ fun baselineWifiAddresses(baseline: SignalSnapshot): Set<String> =
  */
 fun isSameAccessPoint(address: String, baselineWifi: Set<String>): Boolean {
     val candidate = address.uppercase(Locale.ROOT)
+    if (candidate in baselineWifi) return true
     if (candidate.length != 17) return false
     return baselineWifi.any { known -> known.length == 17 && (known.substring(3) == candidate.substring(3) || known.dropLast(2) == candidate.dropLast(2)) }
 }
@@ -94,9 +95,11 @@ fun watchView(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowle
             key in acknowledged -> null
             // 빈 교실에 없던 묶음은 바로 보인다. 와이파이 주소는 바뀌지 않으므로 바로 알린다.
             before == 0 -> SignalGroup(key, sorted, 0, alert = wifi || established > 0)
-            // 같은 이름의 와이파이는 주소가 몇 개든 원래 있던 것이다. 이름 없는 묶음은 이름이 같다는 근거가 없으므로
-            // 같은 공유기의 주소(isSameAccessPoint)는 위에서 이미 걸렀고, 남은 것이 빈 교실보다 늘면 알린다.
-            wifi && key != HIDDEN_WIFI_KEY -> null
+            // 이름을 숨긴 와이파이는 이름이 같다는 근거가 없다. 빈 교실 공유기의 주소는 위에서 이미 걸렀으므로
+            // 남은 것은 모두 새 전파다. 주소가 바뀌지 않으므로 바로 알린다.
+            wifi && key == HIDDEN_WIFI_KEY -> SignalGroup(key, sorted, 0, alert = true)
+            // 같은 이름의 와이파이는 주소가 몇 개든 원래 있던 것이다.
+            wifi -> null
             established > before -> SignalGroup(key, sorted, before, alert = true)
             else -> null
         }
