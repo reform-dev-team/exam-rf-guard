@@ -102,6 +102,8 @@ class AppViewModel(private val app: Context) : ViewModel() {
     private var refreshJob: Job? = null
 
     init {
+        // 앞서 감시 중에 앱이 종료되었다면 휴대폰이 무음으로 남아 있다. 새로 시작할 때 원래대로 되돌린다.
+        silent.restoreLeftover()
         scope.launch {
             identityResolver = withContext(Dispatchers.IO) {
                 fun rows(file: String) = app.assets.open(file).bufferedReader().useLines { lines ->
