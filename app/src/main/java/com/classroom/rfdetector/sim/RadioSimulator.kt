@@ -43,8 +43,7 @@ class RadioSimulator {
     }
 
     /** 4Hz 정도로 호출: 원점 기준 관측값 생성 */
-    fun tick(): List<RfObservation> {
-        val now = System.currentTimeMillis()
+    fun tick(now: Long = System.currentTimeMillis()): List<RfObservation> {
         return devices.map { d ->
             val dist = max(0.4, hypot(d.x, d.y))
             var rssi = d.txDbm - 10 * 2.7 * log10(dist) + rnd.nextGaussian() * 3.2

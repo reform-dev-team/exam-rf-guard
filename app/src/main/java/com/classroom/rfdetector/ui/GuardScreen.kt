@@ -59,6 +59,7 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
     val session by vm.scanSession.collectAsState()
     val tick by vm.healthTick.collectAsState()
     val watch by vm.watch.collectAsState()
+    val surveyNotices by vm.surveyNotices.collectAsState()
     val problems by vm.problems.collectAsState()
     val silenceMissing by vm.silenceMissing.collectAsState()
     val airplaneOff by vm.airplaneOff.collectAsState()
@@ -180,6 +181,25 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                             }
                         }
                     }
+                    if (surveyNotices.isNotEmpty()) {
+                        item {
+                            GuardPanel {
+                                Text("비교 중 발견한 후보 기록 ${surveyNotices.size}개", fontWeight = FontWeight.Bold)
+                                Text("현재 경고 수와 별도로, 기존 확인 기준에 따라 최대 50개까지 임시로 보관합니다.", color = RfColors.textDim)
+                                surveyNotices.forEach { notice ->
+                                    val current = watching && devices.any {
+                                        it.trackingKey == notice.trackingKey && it.presence == SignalPresence.RECENT
+                                    }
+                                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                        TextButton(onClick = { onFind(notice.trackingKey) }, modifier = Modifier.weight(1f)) {
+                                            Text("${notice.displayName}\n${notice.key} · ${if (current) "지금 잡힘" else "지금 받지 못함"}")
+                                        }
+                                        TextButton(onClick = { vm.dismissSurveyNotice(notice.trackingKey) }) { Text("지우기") }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     examModeItems(airplaneOff && !simulation, silenceMissing && !simulation)
                     if (watching) {
                         item { Text("이 화면이 켜져 있는 동안에만 감시합니다. 화면은 자동으로 꺼지지 않으니 전원 버튼을 누르거나 다른 앱으로 가지 마세요. 충전기를 꽂아 두면 좋습니다.${if (silenceMissing || simulation) "" else " 감시 중에는 전화·알림·알람이 울리지 않게 휴대폰을 무음으로 바꿔 둡니다."}", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall) }
@@ -249,15 +269,19 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
     val devices by vm.devices.collectAsState()
     val geigerOn by vm.geigerOn.collectAsState()
     val scanning by vm.scanning.collectAsState()
+    val surveyNotices by vm.surveyNotices.collectAsState()
     val watch by vm.watch.collectAsState()
-    val device = devices.firstOrNull { it.trackingKey == trackingKey }
+    val retained = surveyNotices.firstOrNull { it.trackingKey == trackingKey }
+    val currentlyReceived = scanning && devices.any { it.trackingKey == trackingKey && it.presence == SignalPresence.RECENT }
+    val device = if (retained != null && !currentlyReceived) retained.copy(presence = SignalPresence.HISTORY)
+        else devices.firstOrNull { it.trackingKey == trackingKey } ?: retained
     val close = { vm.findTarget.value = null; vm.setGeiger(false); onBack() }
     if (device == null) { LaunchedEffect(Unit) { close() }; return }
     val (kind, symbol) = plainKind(device)
     val live = device.presence != SignalPresence.HISTORY
     val accent = if (live) classAccent(device.distanceClass) else RfColors.textDim
     // 새 전파로 올라온 것만 "확인함"으로 뺄 수 있다. 원래 있던 전파는 뺄 목록이 없다.
-    val flagged = (watch.wifi + watch.bluetooth + watch.far).any { it.key == device.groupKey }
+    val flagged = retained != null || (watch.wifi + watch.bluetooth + watch.far).any { it.key == device.groupKey }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -265,6 +289,7 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
                 Column {
                     Text(cardLabels(device).first, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     if (!flagged) Text("빈 교실 기록에 있던 전파", color = RfColors.primary, style = MaterialTheme.typography.labelMedium)
+                    if (retained != null && !currentlyReceived) Text("비교 중 발견 · 지금 받지 못함", color = RfColors.warning)
                     Text(if (kind in unknownKinds) cardLabels(device).second else advertisedName(device.key, device.displayName)?.let { "기기가 알린 이름: $it" } ?: "이름을 알리지 않는 기기",
                         color = RfColors.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -281,7 +306,7 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
             Surface(color = RfColors.surface, shape = RoundedCornerShape(18.dp)) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("가까울수록 빠른 진동", Modifier.weight(1f))
-                    Switch(checked = geigerOn, enabled = scanning, onCheckedChange = { on -> vm.findTarget.value = if (on) device.trackingKey else null; vm.setGeiger(on) })
+                    Switch(checked = geigerOn, enabled = scanning && live, onCheckedChange = { on -> vm.findTarget.value = if (on) device.trackingKey else null; vm.setGeiger(on) })
                 }
             }
             GuardPanel {
@@ -294,12 +319,12 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
                 }
                 Text("모두 기기가 스스로 알린 값이라 바꾸거나 흉내 낼 수 있습니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
             }
-            Text("${presenceText(device)} · 처음 잡힌 시각 ${clock(device.firstSeenMs)}" + if (device.periods.size > 1) " · 사라졌다 다시 나타남 ${device.periods.size - 1}회" else "", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
+            Text("${if (retained != null && !currentlyReceived) "마지막 수신 ${clock(device.lastSeenMs)}" else presenceText(device)} · 처음 잡힌 시각 ${clock(device.firstSeenMs)}" + if (device.periods.size > 1) " · 사라졌다 다시 나타남 ${device.periods.size - 1}회" else "", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
             Text("거리는 전파 세기로 어림한 값이라 벽과 사람에 따라 달라집니다. 종류는 기기가 스스로 알린 정보로 추정한 것이며, 이 표시만으로 부정행위라고 판단하지 마세요.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
         }
         Surface(color = RfColors.surface) {
             Row(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (flagged) OutlinedButton(onClick = { vm.acknowledge(device.acknowledgeKey); close() }, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = RoundedCornerShape(16.dp)) { Text("확인함\n목록에서 빼기") }
+                if (flagged) OutlinedButton(onClick = { vm.acknowledge((retained ?: device).acknowledgeKey); close() }, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = RoundedCornerShape(16.dp)) { Text("확인함\n목록에서 빼기") }
                 Button(onClick = close, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = RfColors.surfaceAlt, contentColor = RfColors.textPrimary)) { Text("목록으로", fontWeight = FontWeight.Bold) }
             }
@@ -422,8 +447,8 @@ private fun infoRows(device: TrackedDevice): List<Pair<String, String>> = buildL
     })
     if (wifi && device.hidden) add("와이파이 이름" to "숨김")
     device.details.forEach { (label, value) -> add(label to value) }
-    add("세기" to "지금 ${device.rssiEma?.let { "%.0f dBm".format(it) } ?: "모름"} · 가장 셀 때 ${device.peakRssi?.let { "$it dBm" } ?: "모름"}")
-    add("받은 횟수" to "${device.observationCount}회 · 처음 ${clock(device.firstSeenMs)} · 마지막 ${device.lastSeenAgeSeconds}초 전")
+    add("세기" to "${if (device.presence == SignalPresence.HISTORY) "마지막" else "지금"} ${device.rssiEma?.let { "%.0f dBm".format(it) } ?: "모름"} · 가장 셀 때 ${device.peakRssi?.let { "$it dBm" } ?: "모름"}")
+    add("받은 횟수" to "${device.observationCount}회 · 처음 ${clock(device.firstSeenMs)} · 마지막 ${clock(device.lastSeenMs)}")
     add("주소" to device.key)
 }
 

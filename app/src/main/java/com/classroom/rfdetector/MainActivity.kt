@@ -27,6 +27,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.classroom.rfdetector.inspection.radio.RadioInspectionScreen
 import com.classroom.rfdetector.ui.*
 
 class MainActivity : ComponentActivity() {
@@ -38,7 +39,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** 화면은 셋뿐이다: 감독관 화면, 한 전파의 위치 찾기, 안내. */
+/** 감독관 화면, 위치 찾기, 다섯 곳 비교와 안내. */
 @Composable
 fun App() {
     val context = LocalContext.current
@@ -48,6 +49,7 @@ fun App() {
     })[AppViewModel::class.java] }
     val lifecycle = (context as ComponentActivity).lifecycle
     var guide by rememberSaveable { mutableStateOf(false) }
+    var survey by rememberSaveable { mutableStateOf(false) }
     var findKey by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingStart by remember { mutableStateOf(false) }
     val needed = remember { vm.requiredPermissions() }
@@ -71,6 +73,7 @@ fun App() {
     val focused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
     LaunchedEffect(focused) { vm.checkExamMode() }
     val scanning by vm.scanning.collectAsState()
+    val watch by vm.watch.collectAsState()
     val simMode by vm.simMode.collectAsState()
     DisposableEffect(scanning) {
         val window = (context as? Activity)?.window
@@ -83,20 +86,33 @@ fun App() {
         else { pendingStart = true; launcher.launch(needed.toTypedArray()) }
     }
     val closeFind = { vm.findTarget.value = null; vm.setGeiger(false); findKey = null }
-    BackHandler(enabled = guide || findKey != null) { if (findKey != null) closeFind() else guide = false }
+    BackHandler(enabled = guide || survey || findKey != null) {
+        if (findKey != null) closeFind() else if (survey) survey = false else guide = false
+    }
 
     Surface(Modifier.fillMaxSize(), color = RfColors.bg) {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
             Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                val sub = guide || findKey != null
-                if (sub) TextButton(onClick = { if (findKey != null) closeFind() else guide = false }, modifier = Modifier.semantics { contentDescription = "돌아가기" }) { Text("‹", style = MaterialTheme.typography.headlineLarge) }
-                Text(if (findKey != null) "위치 찾기" else if (guide) "안내" else "KoriyoSCAN", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                val sub = guide || survey || findKey != null
+                if (sub) TextButton(onClick = { if (findKey != null) closeFind() else if (survey) survey = false else guide = false }, modifier = Modifier.semantics { contentDescription = "돌아가기" }) { Text("‹", style = MaterialTheme.typography.headlineLarge) }
+                Text(if (findKey != null) "위치 찾기" else if (survey) "다섯 곳 신호 비교" else if (guide) "안내" else "KoriyoSCAN", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 if (!sub) TextButton(onClick = { guide = true }) { Text("안내") }
+            }
+            if (survey && scanning && watch.count > 0) {
+                Text(
+                    "새 신호 ${watch.count}개",
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                    color = RfColors.warning, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold
+                )
+            }
+            if (!guide && !survey && findKey == null) {
+                TextButton(onClick = { survey = true }, modifier = Modifier.align(Alignment.End).padding(end = 8.dp)) { Text("다섯 곳 비교") }
             }
             Box(Modifier.weight(1f)) {
                 val key = findKey
                 when {
                     key != null -> FindScreen(vm, key, onBack = { findKey = null })
+                    survey -> RadioInspectionScreen(vm)
                     guide -> GuideScreen()
                     else -> GuardScreen(vm, !allGranted, start, { launcher.launch(needed.toTypedArray()) }, openSettings, onFind = { findKey = it })
                 }

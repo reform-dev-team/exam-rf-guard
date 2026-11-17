@@ -22,6 +22,9 @@ import com.classroom.rfdetector.core.WatchView
 import com.classroom.rfdetector.core.baselineGroupCounts
 import com.classroom.rfdetector.core.baselineSamples
 import com.classroom.rfdetector.core.baselineWifiAddresses
+import com.classroom.rfdetector.core.groupKey
+import com.classroom.rfdetector.core.acknowledgeKey
+import com.classroom.rfdetector.core.WEAK_SIGNAL_DBM
 import com.classroom.rfdetector.core.watchView
 import com.classroom.rfdetector.scanner.BleScanner
 import com.classroom.rfdetector.scanner.WifiScanner
@@ -46,7 +49,7 @@ import java.util.concurrent.Executors
 enum class RadioProblem { BLUETOOTH_OFF, WIFI_OFF, LOCATION_OFF }
 
 /** 빈 교실 기록 → 시험 중 감시의 상태를 화면 재생성과 무관하게 유지한다. 화면 밖에서는 수신을 멈춘다. */
-class AppViewModel(private val app: Context) : ViewModel() {
+class AppViewModel(private val app: Context, private val nowMs: () -> Long = System::currentTimeMillis) : ViewModel() {
     companion object {
         private val archiveDispatcher = Executors.newSingleThreadExecutor { task -> Thread(task, "rf-archive").apply { isDaemon = true } }.asCoroutineDispatcher()
     }
@@ -85,6 +88,38 @@ class AppViewModel(private val app: Context) : ViewModel() {
 
     /** 빈 교실 기록과 비교해 지금 잡히는 전파를 묶음으로 나눈 결과. */
     val watch = MutableStateFlow(WatchView())
+    /** 비교 화면에서 본 후보만 이번 감시 동안 메모리에 보관한다. */
+    val surveyNotices = MutableStateFlow<List<TrackedDevice>>(emptyList())
+    private var surveyOpen = false
+    private var surveyCaptureAfterMs = 0L
+    private val surveyNoticeLimit = 50
+
+    fun setSurveyOpen(open: Boolean) {
+        surveyOpen = open
+        if (open) surveyCaptureAfterMs = nowMs()
+    }
+
+    fun dismissSurveyNotice(trackingKey: String) {
+        surveyNotices.value = surveyNotices.value.filterNot { it.trackingKey == trackingKey }
+    }
+
+    private fun retainSurveyCandidates(view: WatchView) {
+        if (!surveyOpen || !scanning.value) return
+        val retained = surveyNotices.value.associateByTo(LinkedHashMap()) { it.acknowledgeKey }
+        val seen = HashSet<String>()
+        (view.wifi + view.bluetooth).forEach { group ->
+            group.devices.forEach { device ->
+                if (device.lastSeenMs >= surveyCaptureAfterMs && (device.rssiEma ?: -127.0) >= WEAK_SIGNAL_DBM) {
+                    val key = device.acknowledgeKey
+                    if (seen.add(key)) {
+                        retained[key] = device
+                        while (retained.size > surveyNoticeLimit) retained.remove(retained.keys.first())
+                    }
+                }
+            }
+        }
+        surveyNotices.value = retained.values.toList()
+    }
     val problems = MutableStateFlow<List<RadioProblem>>(emptyList())
     private var problemsCheckedAtMs = 0L
     /** 위치 찾기 대상(trackingKey). 지정하면 근접 진동이 이 기기를 따른다. */
@@ -146,7 +181,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
     fun pauseForBackground() {
         if (!scanning.value) return
         stopScan(keepSilent = true)
-        pausedAtMs = System.currentTimeMillis()
+        pausedAtMs = nowMs()
     }
 
     fun resumeFromBackground() {
@@ -155,17 +190,19 @@ class AppViewModel(private val app: Context) : ViewModel() {
 
     private fun begin(resumedPauseAtMs: Long?) {
         if (scanning.value || closed) return
+        if (surveyOpen) surveyCaptureAfterMs = nowMs()
         pausedAtMs = null
         val paused = scanSession.value?.takeIf { resumedPauseAtMs != null }
         if (paused != null) {
             scanSession.value = paused.copy(pauses = paused.pauses + 1,
-                pausedMs = paused.pausedMs + (System.currentTimeMillis() - resumedPauseAtMs!!).coerceAtLeast(0))
+                pausedMs = paused.pausedMs + (nowMs() - resumedPauseAtMs!!).coerceAtLeast(0))
         } else {
+            surveyNotices.value = emptyList()
             acknowledged.value = emptySet()
             tracker.clear()
             _devices.value = emptyList()
             watch.value = WatchView()
-            scanSession.value = ScanSession(UUID.randomUUID().toString(), System.currentTimeMillis(), "시험실")
+            scanSession.value = ScanSession(UUID.randomUUID().toString(), nowMs(), "시험실")
         }
         applyBaseline()
         scanning.value = true
@@ -174,7 +211,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
             if (paused == null) sim.reset()
             simJob = scope.launch {
                 while (isActive) {
-                    sim.tick().forEach { onObservation(it) }
+                    sim.tick(nowMs()).forEach { onObservation(it) }
                     delay(250)
                 }
             }
@@ -204,6 +241,18 @@ class AppViewModel(private val app: Context) : ViewModel() {
         if (scanning.value && !simMode.value) silent.on()
     }
 
+    /** 다섯 곳 비교는 현재 기본 감시와 시험 설정이 모두 유효할 때만 받는다. */
+    fun surveyAllowed(source: com.classroom.rfdetector.core.ScanSource): Boolean =
+        scanning.value && !simMode.value &&
+            ((app.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 || !airplaneModeOff()) &&
+            silent.allowed() &&
+            (app.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager)
+                .currentInterruptionFilter == android.app.NotificationManager.INTERRUPTION_FILTER_PRIORITY &&
+            requiredPermissions().all {
+                androidx.core.content.ContextCompat.checkSelfPermission(app, it) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            } && radioProblems().isEmpty() &&
+            if (source == com.classroom.rfdetector.core.ScanSource.BLE) ble.active else wifi.active
+
     /** keepSilent: 앱을 잠시 벗어난 동안에도 시험 중이므로 무음을 유지한다. */
     fun stopScan(keepSilent: Boolean = false) {
         if (!keepSilent) silent.off()
@@ -230,7 +279,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
         val session = scanSession.value ?: return
         if (!scanning.value || snapshotBusy.value || devices.value.isEmpty()) return
         refresh()
-        val snapshot = SignalSnapshot.capture(session.area, System.currentTimeMillis(), simMode.value, devices.value)
+        val snapshot = SignalSnapshot.capture(session.area, nowMs(), simMode.value, devices.value)
         snapshotBusy.value = true
         snapshotError.value = null
         storageScope.launch {
@@ -240,6 +289,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
                 withContext(Dispatchers.Main.immediate) {
                     if (!snapshot.simulation) savedBaseline.value = snapshot
                     if (!closed && scanSession.value?.id == session.id) {
+                        surveyNotices.value = emptyList()
                         baselineSnapshot.value = snapshot
                         applyBaseline()
                         refresh()
@@ -256,12 +306,14 @@ class AppViewModel(private val app: Context) : ViewModel() {
     /** 앱을 다시 연 뒤, 마지막으로 저장한 빈 교실 기록으로 바로 감시한다. */
     fun useSavedBaseline() {
         val saved = savedBaseline.value ?: return
+        surveyNotices.value = emptyList()
         baselineSnapshot.value = saved
         applyBaseline()
     }
 
     /** 빈 교실 기록을 비운다. 다음 시작은 1단계 측정부터다. */
     fun resetBaseline() {
+        surveyNotices.value = emptyList()
         baselineSnapshot.value = null
         watch.value = WatchView()
         applyBaseline()
@@ -275,6 +327,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
     }
 
     fun acknowledge(groupKey: String) {
+        surveyNotices.value = surveyNotices.value.filterNot { it.acknowledgeKey == groupKey }
         acknowledged.value += groupKey
         refresh() // 다음 갱신 주기를 기다리지 않고 목록에서 바로 뺀다.
     }
@@ -301,7 +354,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
     }
 
     private fun refresh() {
-        val now = System.currentTimeMillis()
+        val now = nowMs()
         healthTick.value = now
         val list = tracker.snapshot(now, includeInactive = true).map { d ->
             d.copy(identity = identityResolver.resolve(d.key, d.displayName, setOf(d.source), d.manufacturerIds))
@@ -309,6 +362,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
         _devices.value = list
         val view = if (baselineSet.value) watchView(list, baselineGroups, acknowledged.value, now, baselineWifi, baselineSamples) else WatchView()
         watch.value = view
+        retainSurveyCandidates(view)
         geiger.setClass(list.firstOrNull { it.trackingKey == findTarget.value && it.presence == SignalPresence.RECENT }?.distanceClass ?: DistanceClass.UNKNOWN)
         // 설정 상태 확인은 1초에 한 번이면 충분하다.
         if (now - problemsCheckedAtMs >= 1_000) {
