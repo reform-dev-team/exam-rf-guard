@@ -60,6 +60,7 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
     val problems by vm.problems.collectAsState()
     val silenceMissing by vm.silenceMissing.collectAsState()
     val airplaneOff by vm.airplaneOff.collectAsState()
+    val discoveries by vm.discoveries.collectAsState()
     var openGroup by remember { mutableStateOf<String?>(null) }
     var farOpen by rememberSaveable { mutableStateOf(false) }
     var findMyOpen by rememberSaveable { mutableStateOf(false) }
@@ -148,28 +149,36 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                 }
                 GuardPhase.WATCH, GuardPhase.ENDED -> {
                     val watching = phase == GuardPhase.WATCH
-                    val found = watch.count > 0
+                    val extraCount = if (watching && !simulation) discoveries.entries.sumOf { (source, state) ->
+                        if (state.isCurrent(tick)) discoveryGroups(source, state.peers, baseline?.discoveryBaselines?.get(source)).count { it.increased } else 0
+                    } else 0
+                    val extraIncomplete = !simulation && discoveries.any { (source, state) ->
+                        !state.isCurrent(tick) || baseline?.discoveryBaselines?.containsKey(source) != true
+                    }
+                    val found = watch.count > 0 || extraCount > 0
                     item {
-                        val incomplete = watching && problems.isNotEmpty()
+                        val incomplete = watching && (problems.isNotEmpty() || extraIncomplete)
                         Surface(color = if (!watching || incomplete) RfColors.surfaceAlt else if (found) warnDim else okDim, shape = RoundedCornerShape(20.dp)) {
                             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                                     val accent = if (!watching) RfColors.textDim else if (found || incomplete) RfColors.warning else RfColors.ok
                                     Box(Modifier.size(48.dp).background(accent, CircleShape), contentAlignment = Alignment.Center) {
-                                        if (watching && found) Text("${watch.count}", color = RfColors.bg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
+                                        if (watching && found) Text("${watch.count + extraCount}", color = RfColors.bg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
                                         else if (incomplete) Text("!", color = RfColors.bg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
                                         else RfGlyph(RfSymbol.CHECK, size = 28.dp, color = RfColors.bg)
                                     }
                                     Text(when {
                                         !watching -> "감시를 끝냈습니다"
-                                        found -> "새 전파 ${watch.count}개 발견"
+                                        watch.count > 0 -> "새 전파 ${watch.count}개 발견"
+                                        extraCount > 0 -> "추가 탐색 확인 후보 ${extraCount}종"
                                         incomplete -> "감시가 완전하지 않습니다"
                                         else -> "새 전파 없음"
                                     }, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = if (watching) accent else RfColors.textPrimary)
                                 }
                                 Text(if (watching) "감시 중 · ${minSec(elapsed)} 경과" else "지금은 전파를 받지 않습니다")
                                 if (watching) Text(when {
-                                    found -> "빈 교실에 없던 전파가 지금 잡히고 있습니다. 줄을 눌러 다가가며 세기를 확인하세요. 사라지면 목록에서 빠집니다."
+                                    watch.count > 0 -> "빈 교실에 없던 전파가 지금 잡히고 있습니다. 줄을 눌러 다가가며 세기를 확인하세요. 사라지면 목록에서 빠집니다."
+                                    extraCount > 0 -> "추가 탐색 목록에서 빈 교실 때보다 늘어난 후보가 있습니다. 아래 탐색 시각과 목록을 확인하세요. 건수는 고유한 기기 대수가 아닙니다."
                                     incomplete -> "아래 문제를 해결하기 전까지는 전파가 있어도 표시되지 않을 수 있습니다."
                                     else -> "지금 잡히는 전파는 모두 빈 교실 기록에 있던 것입니다."
                                 }, color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
@@ -202,15 +211,22 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                     }
                 }
             }
+            if (!simulation && phase != GuardPhase.READY) {
+                discoveries.forEach { (source, state) ->
+                    item {
+                        DiscoveryPanel(source, state, baseline?.discoveryBaselines?.get(source), baselineSet, maxOf(tick, System.currentTimeMillis()))
+                    }
+                }
+            }
             error?.let { message -> item { Text(message, color = RfColors.warning, style = MaterialTheme.typography.bodySmall) } }
         }
         Surface(color = RfColors.surface) {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (phase == GuardPhase.WATCH || phase == GuardPhase.ENDED) Text("이 앱은 와이파이와 저전력 블루투스(BLE) 신호만 봅니다. 아무것도 잡히지 않아도 부정행위가 없다는 뜻은 아닙니다. LTE만 쓰는 기기는 보이지 않습니다.", color = RfColors.textDim, style = MaterialTheme.typography.labelSmall)
+                if (phase == GuardPhase.WATCH || phase == GuardPhase.ENDED) Text("연속 감시는 Wi-Fi 접속점과 BLE를 보고, 추가 탐색은 2분 주기로 실행합니다. 아무것도 잡히지 않아도 기기가 없다는 뜻은 아닙니다. LTE만 쓰는 기기는 보이지 않습니다.", color = RfColors.textDim, style = MaterialTheme.typography.labelSmall)
                 when (phase) {
                     GuardPhase.READY -> MainButton("빈 교실 측정 시작", onClick = onStart)
                     GuardPhase.COLLECT -> MainButton(if (collected || elapsed >= COLLECT_SECONDS) "빈 교실 기록 저장" else "빈 교실 기록 저장 · ${minSec(COLLECT_SECONDS - elapsed)} 뒤",
-                        enabled = devices.isNotEmpty() && !busy && collected) { vm.takeBaseline() }
+                        enabled = (devices.isNotEmpty() || discoveries.values.any { it.lastSuccessAtMs != null }) && !busy && collected) { vm.takeBaseline() }
                     GuardPhase.WATCH -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         OutlinedButton(onClick = { confirmRestart = true }, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = RoundedCornerShape(16.dp)) { Text("빈 교실부터\n다시 측정") }
                         Button(onClick = { confirmStop = true }, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = RoundedCornerShape(16.dp),
@@ -324,7 +340,7 @@ fun GuideScreen() {
         }
         GuardPanel {
             Text("이 앱이 보는 것", fontWeight = FontWeight.Bold)
-            Text("와이파이와 저전력 블루투스(BLE)가 주변에 내보내는 알림 신호만 봅니다. 기기끼리 이미 연결되어 주고받는 내용은 보지 못합니다.", style = MaterialTheme.typography.bodyMedium)
+            Text("Wi-Fi 접속점과 BLE 알림 신호를 연속 감시하고, 2분마다 Bluetooth 일반 탐색을 추가로 실행합니다. 일반 탐색은 검색 가능한 기기만 찾으며 BLE 목록과 중복될 수 있습니다. 추가 탐색은 거리를 재지 않습니다. 기기끼리 이미 연결되어 주고받는 내용은 보지 못합니다.", style = MaterialTheme.typography.bodyMedium)
         }
         Surface(color = okDim, shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -343,7 +359,7 @@ fun GuideScreen() {
         Surface(color = RfColors.dangerDim, shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("이 앱이 못 잡는 것", fontWeight = FontWeight.Bold, color = Color(0xFFFF9A9A))
-                GuideList("블루투스와 와이파이를 끈 채 숨긴 휴대폰, LTE 모듈", "선으로 연결한 카메라, 저장만 하는 카메라", "목걸이와 귓속 초소형 수신기", "구형(클래식) 블루투스만 쓰는 기기", "화장실 등 교실 밖에서 쓰는 기기")
+                GuideList("블루투스와 와이파이를 끈 채 숨긴 휴대폰, LTE 모듈", "선으로 연결한 카메라, 저장만 하는 카메라", "목걸이와 귓속 초소형 수신기", "검색에 응답하지 않고 BLE 알림도 내지 않는 Bluetooth 기기", "화장실 등 교실 밖에서 쓰는 기기")
                 Text("이것들은 전파 탐지기(LTE 송신), 금속 탐지기(휴대폰·모듈), 눈으로 하는 확인(귀·목 뒤·단추)으로 보완해야 합니다. 앱에 아무것도 잡히지 않아도 부정행위가 없다는 뜻은 아닙니다.", style = MaterialTheme.typography.bodySmall)
             }
         }

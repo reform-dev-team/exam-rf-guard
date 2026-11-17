@@ -17,6 +17,7 @@ data class SignalSnapshot(
     val capturedAtMs: Long,
     val simulation: Boolean,
     val signals: List<SnapshotSignal>,
+    val discoveryBaselines: Map<ScanSource, Map<String, Int>> = emptyMap(),
 ) {
     companion object {
         fun capture(area: String, capturedAtMs: Long, simulation: Boolean, devices: List<TrackedDevice>): SignalSnapshot {

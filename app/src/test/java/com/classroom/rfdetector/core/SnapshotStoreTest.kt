@@ -28,6 +28,15 @@ class SnapshotStoreTest {
         assertTrue(SnapshotStore(directory.root).load().isEmpty())
     }
 
+    @Test fun discoveryBaselinesPreserveEmptySuccessfulSourcesAndMaximumCounts() {
+        val snapshot = SignalSnapshot("Room", 1000, false, emptyList(), mapOf(
+            ScanSource.BLUETOOTH_DISCOVERY to mapOf("BLUETOOTH_DISCOVERY:name:accessory" to 2),
+            ScanSource.WIFI to emptyMap(),
+        ))
+        SnapshotStore(directory.root).save(listOf(snapshot))
+        assertEquals(snapshot, SnapshotStore(directory.root).load().single())
+    }
+
     @Test fun presenceCompanyIdsAndHintsSurviveReopen() {
         val signal = SnapshotSignal("earbud", ScanSource.BLE, "AirPods Pro", -65.0, "Apple", SignalPresence.HISTORY,
             setOf(76), setOf(SignalHint.APPLE_AUDIO))

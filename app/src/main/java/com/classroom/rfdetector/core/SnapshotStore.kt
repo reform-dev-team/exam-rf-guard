@@ -15,13 +15,13 @@ class SnapshotStore(private val directory: File) {
     fun load(): List<SignalSnapshot> {
         if (!file.exists()) return emptyList()
         val root = JSONObject(file.readText(Charsets.UTF_8))
-        require(root.getInt("version") in 1..2) { "지원하지 않는 스냅샷 파일 버전입니다." }
+        require(root.getInt("version") in 1..3) { "지원하지 않는 스냅샷 파일 버전입니다." }
         val snapshots = root.getJSONArray("snapshots")
         return (0 until snapshots.length()).map { index -> decode(snapshots.getJSONObject(index)) }
     }
 
     fun save(snapshots: List<SignalSnapshot>) {
-        val root = JSONObject().put("version", 2).put("snapshots", JSONArray().apply { snapshots.forEach { put(encode(it)) } })
+        val root = JSONObject().put("version", 3).put("snapshots", JSONArray().apply { snapshots.forEach { put(encode(it)) } })
         val temporary = File.createTempFile("signal-snapshots-", ".tmp", directory)
         try {
             FileOutputStream(temporary).use { stream ->
@@ -42,6 +42,11 @@ class SnapshotStore(private val directory: File) {
         put("area", snapshot.area)
         put("capturedAtMs", snapshot.capturedAtMs)
         put("simulation", snapshot.simulation)
+        put("discoveryBaselines", JSONObject().apply {
+            snapshot.discoveryBaselines.forEach { (source, counts) ->
+                put(source.name, JSONObject().apply { counts.forEach { (key, count) -> put(key, count) } })
+            }
+        })
         put("signals", JSONArray().apply { snapshot.signals.forEach { signal ->
             put(JSONObject().apply {
                 put("address", signal.address); put("source", signal.source.name); put("name", signal.name)
@@ -67,7 +72,17 @@ class SnapshotStore(private val directory: File) {
                     SignalHint.entries.firstOrNull { it.name == names.getString(index) }
                 }.toSet() } ?: emptySet())
         } }
+        val baselines = mutableMapOf<ScanSource, Map<String, Int>>()
+        json.optJSONObject("discoveryBaselines")?.let { sources ->
+            sources.keys().forEach { name ->
+                val source = ScanSource.entries.firstOrNull { it.name == name } ?: return@forEach
+                val counts = sources.getJSONObject(name)
+                baselines[source] = counts.keys().asSequence().associateWith { key ->
+                    counts.getInt(key).also { require(it >= 0) { "Invalid discovery baseline count" } }
+                }
+            }
+        }
         return SignalSnapshot(json.getString("area"), json.getLong("capturedAtMs"),
-            json.getBoolean("simulation"), signals)
+            json.getBoolean("simulation"), signals, baselines)
     }
 }
