@@ -1,6 +1,8 @@
 package com.classroom.rfdetector.ui
 
+import android.content.Intent
 import android.graphics.Bitmap
+import android.os.BatteryManager
 import android.graphics.Canvas
 import android.os.Looper
 import android.view.inspector.WindowInspector
@@ -133,6 +135,27 @@ class GuardFlowTest {
             compose.onNodeWithText("확인함\n목록에서 빼기").assertDoesNotExist()
             compose.onNodeWithText("목록으로").performClick()
             compose.onNodeWithText("감시 끝내기").assertIsDisplayed()
+        } finally { vm.shutdown() }
+    }
+
+    private fun sendBattery(level: Int, plugged: Int) = compose.runOnIdle {
+        compose.activity.sendStickyBroadcast(Intent(Intent.ACTION_BATTERY_CHANGED)
+            .putExtra(BatteryManager.EXTRA_LEVEL, level).putExtra(BatteryManager.EXTRA_SCALE, 100).putExtra(BatteryManager.EXTRA_PLUGGED, plugged))
+        shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    @Test fun warnsWhileWatchingWhenTheChargerIsUnplugged() {
+        val vm = launch()
+        try {
+            recordEmptyRoom(vm)
+            sendBattery(level = 64, plugged = 0)
+            waitForText("충전기가 연결되어 있지 않습니다 · 배터리 64%")
+            saveScreen("guard-battery-unplugged")
+            sendBattery(level = 15, plugged = 0)
+            waitForText("배터리가 15% 남았습니다")
+            sendBattery(level = 15, plugged = BatteryManager.BATTERY_PLUGGED_AC)
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("배터리가 15% 남았습니다").fetchSemanticsNodes().isEmpty() }
+            compose.onNodeWithText("충전기가 연결되어 있지 않습니다", substring = true).assertDoesNotExist()
         } finally { vm.shutdown() }
     }
 

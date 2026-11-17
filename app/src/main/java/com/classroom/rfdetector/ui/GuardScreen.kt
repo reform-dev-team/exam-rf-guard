@@ -62,6 +62,7 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
     val problems by vm.problems.collectAsState()
     val silenceMissing by vm.silenceMissing.collectAsState()
     val airplaneOff by vm.airplaneOff.collectAsState()
+    val battery by vm.battery.collectAsState()
     var openGroup by remember { mutableStateOf<String?>(null) }
     var farOpen by rememberSaveable { mutableStateOf(false) }
     var findMyOpen by rememberSaveable { mutableStateOf(false) }
@@ -141,7 +142,7 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                         }
                     }
                     problemItems(problems)
-                    examModeItems(airplaneOff && !simulation, silenceMissing && !simulation)
+                    examModeItems(airplaneOff && !simulation, silenceMissing && !simulation, battery)
                     item {
                         GuardPanel {
                             Text("지금 수험생이 있으면 안 됩니다", fontWeight = FontWeight.SemiBold)
@@ -180,7 +181,7 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                             }
                         }
                     }
-                    examModeItems(airplaneOff && !simulation, silenceMissing && !simulation)
+                    examModeItems(airplaneOff && !simulation, silenceMissing && !simulation, battery)
                     if (watching) {
                         item { Text("이 화면이 켜져 있는 동안에만 감시합니다. 화면은 자동으로 꺼지지 않으니 전원 버튼을 누르거나 다른 앱으로 가지 마세요. 충전기를 꽂아 두면 좋습니다.${if (silenceMissing || simulation) "" else " 감시 중에는 전화·알림·알람이 울리지 않게 휴대폰을 무음으로 바꿔 둡니다."}", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall) }
                         problemItems(problems)
@@ -555,7 +556,18 @@ private fun GuardNotice(title: String, body: String, action: (@Composable () -> 
     }
 }
 
-private fun LazyListScope.examModeItems(airplaneOff: Boolean, silenceMissing: Boolean) {
+/** 배터리 상태는 가상 전파로 돌 때도 실제 휴대폰의 것이라 그대로 보여 준다. */
+private fun LazyListScope.examModeItems(airplaneOff: Boolean, silenceMissing: Boolean, battery: BatteryState?) {
+    val level = battery?.levelPercent?.let { " · 배터리 $it%" }.orEmpty()
+    when (batteryWarning(battery)) {
+        BatteryWarning.LOW -> item(key = "exam-battery") {
+            GuardNotice("배터리가 ${battery?.levelPercent}% 남았습니다", "곧 꺼질 수 있습니다. 꺼지면 감시가 멈추고 따로 알리지도 않습니다. 지금 충전기를 연결해 주세요.")
+        }
+        BatteryWarning.NOT_CHARGING -> item(key = "exam-battery") {
+            GuardNotice("충전기가 연결되어 있지 않습니다$level", "시험 내내 화면을 켜 두므로 배터리가 빨리 닳습니다. 배터리가 꺼지면 감시가 알림 없이 멈춥니다. 충전기를 연결해 주세요.")
+        }
+        BatteryWarning.NONE -> Unit
+    }
     if (airplaneOff) item(key = "exam-airplane") {
         val context = LocalContext.current
         GuardNotice("비행기 모드가 꺼져 있습니다", "전화나 문자가 오면 감시 화면이 가려지고 감시가 멈춥니다. 비행기 모드를 켠 뒤 와이파이와 블루투스만 다시 켜 주세요. 꺼져 있으면 측정을 시작할 수 없습니다.") {

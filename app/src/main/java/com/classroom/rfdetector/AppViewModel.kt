@@ -1,11 +1,17 @@
 package com.classroom.rfdetector
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
 import android.location.LocationManager
 import android.os.Build
 import android.provider.Settings
+import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 import androidx.lifecycle.ViewModel
+import com.classroom.rfdetector.core.BatteryState
 import com.classroom.rfdetector.core.DeviceIdentityResolver
 import com.classroom.rfdetector.core.DeviceTracker
 import com.classroom.rfdetector.core.DistanceClass
@@ -20,6 +26,7 @@ import com.classroom.rfdetector.core.SnapshotStore
 import com.classroom.rfdetector.core.TrackedDevice
 import com.classroom.rfdetector.core.WatchView
 import com.classroom.rfdetector.core.baselineGroupCounts
+import com.classroom.rfdetector.core.batteryState
 import com.classroom.rfdetector.core.baselineSamples
 import com.classroom.rfdetector.core.baselineWifiAddresses
 import com.classroom.rfdetector.core.watchView
@@ -97,11 +104,18 @@ class AppViewModel(private val app: Context) : ViewModel() {
     val silenceMissing = MutableStateFlow(!silent.allowed())
     /** 비행기 모드가 꺼져 있어 전화·문자가 들어올 수 있는 상태. 앱이 직접 켤 수는 없다. */
     val airplaneOff = MutableStateFlow(airplaneModeOff())
+    /** 배터리 잔량과 충전기 연결. 모르면 null. 시스템이 바뀔 때마다 알려 준다. */
+    val battery = MutableStateFlow<BatteryState?>(null)
+    private val batteryReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) { battery.value = readBattery(intent) }
+    }
 
     private var simJob: Job? = null
     private var refreshJob: Job? = null
 
     init {
+        ContextCompat.registerReceiver(app, batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
+            ?.let { battery.value = readBattery(it) }
         scope.launch {
             identityResolver = withContext(Dispatchers.IO) {
                 fun rows(file: String) = app.assets.open(file).bufferedReader().useLines { lines ->
@@ -193,6 +207,9 @@ class AppViewModel(private val app: Context) : ViewModel() {
     private fun onObservation(obs: RfObservation) {
         if (scanning.value) tracker.update(obs)
     }
+
+    private fun readBattery(intent: Intent) = batteryState(intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1),
+        intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1), intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1))
 
     private fun airplaneModeOff() = Settings.Global.getInt(app.contentResolver, Settings.Global.AIRPLANE_MODE_ON, 0) == 0
 
@@ -327,6 +344,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
 
     fun shutdown() {
         stopScan()
+        if (!closed) runCatching { app.unregisterReceiver(batteryReceiver) }
         closed = true
         scope.cancel()
     }
