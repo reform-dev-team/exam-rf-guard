@@ -250,6 +250,7 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
     val geigerOn by vm.geigerOn.collectAsState()
     val scanning by vm.scanning.collectAsState()
     val watch by vm.watch.collectAsState()
+    val baseline by vm.baselineSnapshot.collectAsState()
     val device = devices.firstOrNull { it.trackingKey == trackingKey }
     val close = { vm.findTarget.value = null; vm.setGeiger(false); onBack() }
     if (device == null) { LaunchedEffect(Unit) { close() }; return }
@@ -258,13 +259,17 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
     val accent = if (live) classAccent(device.distanceClass) else RfColors.textDim
     // 새 전파로 올라온 것만 "확인함"으로 뺄 수 있다. 원래 있던 전파는 뺄 목록이 없다.
     val flagged = (watch.wifi + watch.bluetooth + watch.far).any { it.key == device.groupKey }
+    // 경보 목록에서 빠졌다는 것만으로 빈 교실 기록에 있었다고 판단할 수는 없다.
+    val recordedInBaseline = baseline?.signals.orEmpty().any { signal ->
+        radioKey(signal.source, signal.address) == device.trackingKey
+    }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(Modifier.size(46.dp).background(if (flagged) warnDim else RfColors.surfaceAlt, CircleShape), contentAlignment = Alignment.Center) { RfGlyph(symbol, size = 26.dp, color = if (flagged) RfColors.warning else RfColors.primary) }
                 Column {
                     Text(cardLabels(device).first, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    if (!flagged) Text("빈 교실 기록에 있던 전파", color = RfColors.primary, style = MaterialTheme.typography.labelMedium)
+                    if (!flagged && recordedInBaseline) Text("빈 교실 기록에 있던 전파", color = RfColors.primary, style = MaterialTheme.typography.labelMedium)
                     Text(if (kind in unknownKinds) cardLabels(device).second else advertisedName(device.key, device.displayName)?.let { "기기가 알린 이름: $it" } ?: "이름을 알리지 않는 기기",
                         color = RfColors.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
