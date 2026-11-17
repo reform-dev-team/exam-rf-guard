@@ -144,6 +144,10 @@ APK는 `app/build/outputs/apk/debug/app-debug.apk`에 생깁니다. 구조와 �
 3. 화면에 뜬 오류 문구
 4. 화면을 첨부한다면 이름·주소·장소를 가려 주세요.
 
+## 기여
+
+코드 기여는 저장소를 포크한 뒤 `main`을 대상으로 Pull Request를 보내 주세요. PR마다 단위 테스트·빌드·Lint가 자동으로 돌고, 통과한 뒤 관리자가 검토해 머지합니다. 절차와 PR 기준은 [CONTRIBUTING.md](CONTRIBUTING.md)에 있습니다.
+
 ## 출처
 
 제조사 정보는 앱에 포함한 공개 등록부(2026년 11월 16일 수집)를 씁니다. 실시간 조회가 아닙니다.
@@ -171,3 +175,5 @@ KoriyoSCAN is an Android app for exam proctors. It records the Wi-Fi access poin
 It cannot detect every device. It only sees Wi-Fi access points and BLE advertisements, so it misses devices that use cellular data only, wired or record-only cameras, Bluetooth Classic devices, and anything that stops advertising once connected. It does not block signals and does not decide whether anyone cheated. Field accuracy has not been measured.
 
 Records stay on the phone; the app declares no internet permission. The UI and the rest of this document are in Korean. Licensed under Apache-2.0; see [NOTICE](NOTICE) for the icon and bundled registry data.
+
+Contributions are welcome through a fork and a pull request against `main`; CI must pass and a maintainer reviews before merging. See [CONTRIBUTING.md](CONTRIBUTING.md) (in Korean).
