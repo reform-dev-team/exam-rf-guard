@@ -76,8 +76,10 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
         else -> GuardPhase.READY
     }
     val elapsed = session?.let { ((maxOf(tick, it.startedAtMs) - it.startedAtMs) / 1000).toInt() } ?: 0
+    // 빈 교실 측정 시간에는 앱을 벗어나 수신이 멈췄던 시간을 넣지 않는다. 넣으면 화면을 꺼 둔 채 시간만 채워도 저장할 수 있다.
+    val received = session?.let { (it.receivingMs(maxOf(tick, it.startedAtMs)) / 1000).toInt() } ?: 0
     // 빈 교실 기록은 2분 이상, 와이파이 탐색이 두 번 끝난 뒤에 저장한다. 와이파이를 못 쓰는 경우 3분 뒤에는 막지 않는다.
-    val collected = simulation || elapsed >= COLLECT_SECONDS + 60 || (elapsed >= COLLECT_SECONDS && vm.wifi.completedScans >= 2)
+    val collected = simulation || received >= COLLECT_SECONDS + 60 || (received >= COLLECT_SECONDS && vm.wifi.completedScans >= 2)
     // 권한, 비행기 모드, 와이파이·블루투스·위치가 모두 갖춰져야 측정과 감시를 시작할 수 있다.
     // 디버그 빌드는 무선 ADB가 끊기지 않게 비행기 모드 단계만 건너뛴다. 측정 화면의 경고는 그대로 뜬다.
     val missing = if (simulation) emptyList() else listOfNotNull(
@@ -132,10 +134,10 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                                 GuardCount("블루투스", devices.count { it.source == ScanSource.BLE }, Modifier.weight(1f))
                                 GuardCount("와이파이", devices.count { it.source == ScanSource.WIFI }, Modifier.weight(1f))
                             }
-                            LinearProgressIndicator(progress = { (elapsed / COLLECT_SECONDS.toFloat()).coerceAtMost(1f) }, modifier = Modifier.fillMaxWidth())
+                            LinearProgressIndicator(progress = { (received / COLLECT_SECONDS.toFloat()).coerceAtMost(1f) }, modifier = Modifier.fillMaxWidth())
                             Text(when {
                                 collected -> "아래 버튼을 누르면 지금까지 잡힌 ${devices.size}개를 이 교실에 원래 있던 전파로 기록하고 감시를 시작합니다."
-                                elapsed < COLLECT_SECONDS -> "${minSec(COLLECT_SECONDS - elapsed)} 남음. 교실 안을 천천히 한 바퀴 걸어 보세요. 늦게 잡히는 전파까지 기록해야 시험 중에 새 전파로 잘못 뜨지 않습니다."
+                                received < COLLECT_SECONDS -> "${minSec(COLLECT_SECONDS - received)} 남음. 교실 안을 천천히 한 바퀴 걸어 보세요. 늦게 잡히는 전파까지 기록해야 시험 중에 새 전파로 잘못 뜨지 않습니다."
                                 else -> "와이파이 탐색이 끝나기를 기다리는 중입니다. 잠시 뒤 저장할 수 있습니다."
                             }, color = if (collected) RfColors.primary else RfColors.textDim)
                         }
@@ -213,7 +215,7 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                 if (phase == GuardPhase.WATCH || phase == GuardPhase.ENDED) Text("이 앱은 와이파이와 저전력 블루투스(BLE) 신호만 봅니다. 아무것도 잡히지 않아도 부정행위가 없다는 뜻은 아닙니다. LTE만 쓰는 기기는 보이지 않습니다.", color = RfColors.textDim, style = MaterialTheme.typography.labelSmall)
                 when (phase) {
                     GuardPhase.READY -> MainButton("빈 교실 측정 시작", onClick = onStart)
-                    GuardPhase.COLLECT -> MainButton(if (collected || elapsed >= COLLECT_SECONDS) "빈 교실 기록 저장" else "빈 교실 기록 저장 · ${minSec(COLLECT_SECONDS - elapsed)} 뒤",
+                    GuardPhase.COLLECT -> MainButton(if (collected || received >= COLLECT_SECONDS) "빈 교실 기록 저장" else "빈 교실 기록 저장 · ${minSec(COLLECT_SECONDS - received)} 뒤",
                         enabled = devices.isNotEmpty() && !busy && collected) { vm.takeBaseline() }
                     GuardPhase.WATCH -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         OutlinedButton(onClick = { confirmRestart = true }, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = RoundedCornerShape(16.dp)) { Text("빈 교실부터\n다시 측정") }
