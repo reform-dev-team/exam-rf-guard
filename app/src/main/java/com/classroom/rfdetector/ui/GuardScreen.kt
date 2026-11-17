@@ -559,7 +559,7 @@ private fun LazyListScope.examModeItems(airplaneOff: Boolean, silenceMissing: Bo
     if (airplaneOff) item(key = "exam-airplane") {
         val context = LocalContext.current
         GuardNotice("비행기 모드가 꺼져 있습니다", "전화나 문자가 오면 감시 화면이 가려지고 감시가 멈춥니다. 비행기 모드를 켠 뒤 와이파이와 블루투스만 다시 켜 주세요. 꺼져 있으면 측정을 시작할 수 없습니다.") {
-            TextButton(onClick = { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_AIRPLANE_MODE_SETTINGS)) }) { Text("비행기 모드 설정 열기") }
+            TextButton(onClick = { openSettingsScreen(context, android.provider.Settings.ACTION_AIRPLANE_MODE_SETTINGS) }) { Text("비행기 모드 설정 열기") }
         }
     }
     if (silenceMissing) item(key = "exam-silence") { SilenceNotice() }
@@ -578,8 +578,17 @@ private fun openSilenceAccess(context: android.content.Context) {
     runCatching {
         context.startActivity(android.content.Intent("android.settings.NOTIFICATION_POLICY_ACCESS_DETAIL_SETTINGS", android.net.Uri.parse("package:${context.packageName}")))
     }.onFailure {
-        context.startActivity(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
+        openSettingsScreen(context, android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
     }
+}
+
+/**
+ * 설정 화면을 연다. Android는 기종에 따라 이 화면들이 없을 수 있다고 안내한다. 없으면 설정 첫 화면을 열고, 그것도 없으면 아무 일도 하지 않는다.
+ * 예외를 그대로 두면 버튼을 누르는 순간 앱이 죽는다. 감시 중이라면 감시가 끊긴다.
+ */
+internal fun openSettingsScreen(context: android.content.Context, action: String) {
+    runCatching { context.startActivity(android.content.Intent(action)) }
+        .onFailure { runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_SETTINGS)) } }
 }
 
 /** 측정을 시작하기 전에 갖춰야 하는 것. 이 순서대로 하나씩 마친다. 비행기 모드를 켜면 와이파이·블루투스가 꺼지므로 그 뒤에 다시 켠다. */
@@ -598,7 +607,7 @@ private fun SetupFlow(missing: List<SetupStep>, onRecheck: () -> Unit, onRequest
     // 알림창에서 켠 블루투스처럼 조금 늦게 반영되는 설정도 놓치지 않게 계속 다시 확인한다.
     LaunchedEffect(Unit) { while (true) { onRecheck(); kotlinx.coroutines.delay(1_000) } }
     val steps = SetupStep.entries
-    val open = { action: String -> context.startActivity(android.content.Intent(action)) }
+    val open = { action: String -> openSettingsScreen(context, action) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         GuardPanel {
             Text("시작 전 준비", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)

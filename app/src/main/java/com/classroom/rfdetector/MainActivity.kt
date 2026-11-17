@@ -77,7 +77,11 @@ fun App() {
         if (scanning) window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
-    val openSettings = { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))) }
+    val openSettings = {
+        runCatching { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))) }
+            .onFailure { openSettingsScreen(context, Settings.ACTION_SETTINGS) }
+        Unit
+    }
     val start = {
         if (simMode || hasPermissions()) vm.startScan()
         else { pendingStart = true; launcher.launch(needed.toTypedArray()) }
