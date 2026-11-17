@@ -77,10 +77,11 @@ fun wifiDetails(frequencyMhz: Int, capabilities: String?, standard: Int?): Map<S
     capabilities?.let { caps ->
         details["보안"] = when {
             "SAE" in caps -> "WPA3"
+            // Android는 OWE도 "[RSN-OWE-CCMP]"처럼 RSN을 붙여 알리므로 RSN보다 먼저 본다.
+            "OWE" in caps -> "암호 없음 · 통신은 암호화"
             "WPA2" in caps || "RSN" in caps -> "WPA2"
             "WPA" in caps -> "WPA"
             "WEP" in caps -> "WEP(오래된 방식)"
-            "OWE" in caps -> "암호 없음 · 통신은 암호화"
             else -> "암호 없음(열린 와이파이)"
         }
     }

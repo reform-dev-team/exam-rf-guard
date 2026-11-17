@@ -26,6 +26,8 @@ class SignalDetailsTest {
         assertEquals(mapOf("주파수" to "5GHz · 채널 36", "보안" to "WPA3", "규격" to "Wi-Fi 6"), wifiDetails(5180, "[RSN-SAE-CCMP][ESS]", 6))
         assertEquals(mapOf("주파수" to "6GHz · 채널 1", "보안" to "암호 없음(열린 와이파이)"), wifiDetails(5955, "[ESS]", null))
         assertEquals(mapOf("보안" to "WEP(오래된 방식)"), wifiDetails(0, "[WEP][ESS]", 1))
+        // Android가 알리는 OWE(Enhanced Open) 형식. RSN이 붙어 있어도 WPA2가 아니다.
+        assertEquals(mapOf("보안" to "암호 없음 · 통신은 암호화"), wifiDetails(0, "[RSN-OWE-CCMP][ESS]", null))
     }
 
     @Test fun routerSelfDescriptionIsReadFromTheWpsBlock() {
