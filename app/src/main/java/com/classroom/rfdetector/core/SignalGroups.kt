@@ -31,12 +31,16 @@ fun advertisedName(address: String, name: String): String? {
 val TrackedDevice.groupKey: String get() = signalGroupKey(source, key, displayName, manufacturerIds, hints)
 
 /**
- * "확인함"으로 목록에서 뺄 때 쓰는 키. 보통은 묶음 키지만, 이름 숨김 와이파이는 서로 다른 기기가 한 묶음에 모이므로
- * 주소마다 따로 뺀다. 묶음째 빼면 숨김 와이파이 하나를 확인한 뒤 새로 켜진 다른 숨김 핫스팟까지 알리지 않게 된다.
+ * 이름이 같아도 같은 기기라는 근거가 없어 주소로 비교하는 와이파이. 이름을 숨긴 것과, 휴대폰 기본 핫스팟 이름을 쓰는 것이다.
+ * "iPhone"이나 "AndroidAP" 같은 이름은 여러 휴대폰이 그대로 쓰므로, 빈 교실에 같은 이름이 있었다고 원래 있던 것으로 보면 안 된다.
  */
-val TrackedDevice.acknowledgeKey: String get() = groupKey.let { group ->
-    if (group == HIDDEN_WIFI_KEY) "$HIDDEN_WIFI_KEY:${key.uppercase(Locale.ROOT)}" else group
-}
+val TrackedDevice.isJudgedByAddress: Boolean get() = source == ScanSource.WIFI && (groupKey == HIDDEN_WIFI_KEY || SignalHint.HOTSPOT in hints)
+
+/**
+ * "확인함"으로 목록에서 뺄 때 쓰는 키. 보통은 묶음 키지만, 주소로 비교하는 와이파이는 서로 다른 기기가 한 묶음에 모이므로
+ * 주소마다 따로 뺀다. 묶음째 빼면 하나를 확인한 뒤 새로 켜진 같은 이름의 다른 핫스팟까지 알리지 않게 된다.
+ */
+val TrackedDevice.acknowledgeKey: String get() = if (isJudgedByAddress) "$groupKey:${key.uppercase(Locale.ROOT)}" else groupKey
 val SnapshotSignal.groupKey: String get() = signalGroupKey(source, address, name, manufacturerIds, hints)
 
 /** 빈 교실 기록에서 묶음마다 동시에 몇 개였는지. 저장 순간 잡히지 않던 묶음은 1개로 친다. */
@@ -93,8 +97,8 @@ fun watchView(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowle
     val (findMy, others) = live.partition { it.source == ScanSource.BLE && it.hints.primary == SignalHint.APPLE_FIND_MY }
     // 이름을 숨긴 것까지 포함해, 빈 교실에 있던 공유기가 뒤늦게 내보인 다른 주소는 원래 있던 것이다.
     val rest = others.filterNot { it.source == ScanSource.WIFI && isSameAccessPoint(it.key, baselineWifi) }
-        // 확인함으로 뺀 이름 숨김 와이파이는 그 주소만 뺀다.
-        .filterNot { it.groupKey == HIDDEN_WIFI_KEY && it.acknowledgeKey in acknowledged }
+        // 확인함으로 뺀 이름 숨김 와이파이와 핫스팟 이름 와이파이는 그 주소만 뺀다.
+        .filterNot { it.isJudgedByAddress && it.acknowledgeKey in acknowledged }
     val flagged = mutableListOf<SignalGroup>()
     rest.groupBy { it.groupKey }.forEach { (key, members) ->
         val sorted = members.sortedByDescending { it.rssiEma ?: Double.NEGATIVE_INFINITY }
@@ -108,6 +112,8 @@ fun watchView(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowle
             // 이름을 숨긴 와이파이는 이름이 같다는 근거가 없다. 빈 교실 공유기의 주소는 위에서 이미 걸렀으므로
             // 남은 것은 모두 새 전파다. 주소가 바뀌지 않으므로 바로 알린다.
             wifi && key == HIDDEN_WIFI_KEY -> SignalGroup(key, sorted, 0, alert = true)
+            // 휴대폰 기본 핫스팟 이름도 마찬가지다. 빈 교실에 "iPhone"이 있었어도 다른 주소의 "iPhone"은 다른 휴대폰이다.
+            wifi && sorted.all { it.isJudgedByAddress } -> SignalGroup(key, sorted, 0, alert = true)
             // 같은 이름의 와이파이는 주소가 몇 개든 원래 있던 것이다.
             wifi -> null
             established > before -> SignalGroup(key, sorted, before, alert = true)
@@ -133,7 +139,10 @@ fun watchView(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowle
 private fun knownGroups(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowledged: Set<String>, baselineWifi: Set<String>,
     samples: List<SnapshotSignal>): List<KnownGroup> {
     val byStrength = compareByDescending<TrackedDevice> { it.rssiEma ?: Double.NEGATIVE_INFINITY }
-    val members = devices.filterNot { it.source == ScanSource.BLE && it.hints.primary == SignalHint.APPLE_FIND_MY }.groupBy { it.groupKey }
+    val members = devices.filterNot { it.source == ScanSource.BLE && it.hints.primary == SignalHint.APPLE_FIND_MY }
+        // 주소로 비교하는 와이파이 가운데 새 전파로 알리는 주소는 이름이 같아도 원래 있던 것의 줄에 넣지 않는다.
+        .filterNot { it.isJudgedByAddress && !isSameAccessPoint(it.key, baselineWifi) && it.acknowledgeKey !in acknowledged }
+        .groupBy { it.groupKey }
     fun row(key: String, sample: SnapshotSignal?): KnownGroup {
         val all = members[key].orEmpty()
         return KnownGroup(key, sample, baseline[key] ?: 0, all.filter { it.presence != SignalPresence.HISTORY }.sortedWith(byStrength), all.maxByOrNull { it.lastSeenMs })
