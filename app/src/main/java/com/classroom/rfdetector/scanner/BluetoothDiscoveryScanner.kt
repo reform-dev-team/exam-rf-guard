@@ -54,7 +54,7 @@ class BluetoothDiscoveryScanner(context: Context) : DiscoveryScanner {
                                                 else -> null
                                             })
                                     }
-                                    BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> if (started) {
+                                    BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> if (started && !radio.isDiscovering) {
                                         owned = false
                                         continuation.resumeWith(Result.success(result(DiscoveryStatus.COMPLETE)))
                                     }

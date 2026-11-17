@@ -31,7 +31,7 @@ class SnapshotStoreTest {
     @Test fun discoveryBaselinesPreserveEmptySuccessfulSourcesAndMaximumCounts() {
         val snapshot = SignalSnapshot("Room", 1000, false, emptyList(), mapOf(
             ScanSource.BLUETOOTH_DISCOVERY to mapOf("BLUETOOTH_DISCOVERY:name:accessory" to 2),
-            ScanSource.WIFI to emptyMap(),
+            ScanSource.WIFI_P2P to emptyMap(),
         ))
         SnapshotStore(directory.root).save(listOf(snapshot))
         assertEquals(snapshot, SnapshotStore(directory.root).load().single())

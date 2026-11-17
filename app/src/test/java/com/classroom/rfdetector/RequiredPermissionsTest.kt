@@ -1,6 +1,7 @@
 package com.classroom.rfdetector
 
 import android.os.Build
+import android.content.pm.PackageManager
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,7 +20,9 @@ class RequiredPermissionsTest {
             assertEquals(Build.VERSION.SDK_INT >= 31, "android.permission.BLUETOOTH_SCAN" in permissions)
             assertEquals(Build.VERSION.SDK_INT >= 31, "android.permission.BLUETOOTH_CONNECT" in permissions)
             assertEquals(Build.VERSION.SDK_INT >= 33, "android.permission.NEARBY_WIFI_DEVICES" in permissions)
-            assertFalse("android.permission.INTERNET" in permissions)
+            val app = RuntimeEnvironment.getApplication()
+            val manifestPermissions = app.packageManager.getPackageInfo(app.packageName, PackageManager.GET_PERMISSIONS).requestedPermissions.orEmpty()
+            assertFalse("android.permission.INTERNET" in manifestPermissions)
         } finally { vm.shutdown() }
     }
 }

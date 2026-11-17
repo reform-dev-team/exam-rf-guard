@@ -3,7 +3,7 @@ package com.classroom.rfdetector.core
 import java.util.Locale
 
 /** 관측 출처 */
-enum class ScanSource { BLE, WIFI, BLUETOOTH_DISCOVERY }
+enum class ScanSource { BLE, WIFI, BLUETOOTH_DISCOVERY, WIFI_P2P }
 
 fun radioKey(source: ScanSource, address: String): String = "${source.name}:${address.uppercase(Locale.ROOT)}"
 

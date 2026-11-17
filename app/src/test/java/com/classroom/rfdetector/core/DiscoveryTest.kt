@@ -51,7 +51,7 @@ class DiscoveryTest {
     @Test fun missingRssiAndNamesAreKeptAndSourcesStaySeparate() {
         val peer = DiscoveryPeer("AA", null)
         val first = discoveryGroups(source, listOf(peer), emptyMap()).single()
-        val second = discoveryGroups(ScanSource.WIFI, listOf(peer), emptyMap()).single()
+        val second = discoveryGroups(ScanSource.WIFI_P2P, listOf(peer), emptyMap()).single()
         assertNotEquals(first.key, second.key)
         assertNull(first.peers.single().rssi)
     }

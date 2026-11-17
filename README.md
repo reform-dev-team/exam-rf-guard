@@ -8,12 +8,12 @@
 
 > **이 앱은 모든 기기를 탐지하지 못합니다.** 전파를 차단하지 않고, 부정행위 여부를 판정하지 않으며, 육안 감독을 대체하지 않습니다. 실제 시험장에서의 수신률·누락률은 검증하지 않았습니다.
 
-개발판은 2분마다 Bluetooth 일반 탐색을 추가로 실행해 검색 가능한 기기를 확인합니다. 결과는 연속 감시와 별도이며, BLE 목록과 같은 기기일 수 있습니다. 완료·실패·부분 결과와 목록 수신 시각을 구분합니다. 이전 버전의 빈 교실 기록에는 이 경로의 기준이 없으므로 비교하려면 다시 측정해야 합니다. [추가 탐색 설계와 검증](docs/PERIODIC-DISCOVERY.md)
+개발판은 2분마다 Bluetooth 일반 탐색과 Wi-Fi Direct 탐색을 차례로 실행합니다. 결과는 연속 감시와 별도이며, 같은 기기가 여러 경로에 나타날 수 있습니다. 완료·실패·부분 결과와 목록 수신 시각을 구분합니다. 이전 버전의 빈 교실 기록에는 이 경로들의 기준이 없으므로 비교하려면 다시 측정해야 합니다. Wi-Fi Direct는 시스템이 보고하는 P2P 목록이며 모든 Wi-Fi 단말을 찾지는 못합니다. [추가 탐색 설계와 검증](docs/PERIODIC-DISCOVERY.md)
 
 | 항목 | 내용 |
 | --- | --- |
 | 지원 환경 | Android 10(API 29) 이상. 아이폰은 지원하지 않습니다. |
-| 보는 것 | 와이파이 접속점과 BLE 알림 신호 연속 감시, Bluetooth 일반 탐색 2분 주기 |
+| 보는 것 | 와이파이 접속점과 BLE 알림 신호 연속 감시, Bluetooth 일반 탐색·Wi-Fi Direct 탐색 2분 주기 |
 | 데이터 | 휴대폰 안에만 저장합니다. 앱에 인터넷 권한이 없습니다. |
 | 측정 조건 | 비행기 모드가 켜져 있어야 시작됩니다. 측정·감시 중에는 휴대폰을 자동으로 무음(방해 금지)으로 바꿉니다. |
 | 화면 | 감독관 화면, 위치 찾기, 안내 |
@@ -88,7 +88,7 @@
 
 ## 탐지 범위
 
-연속 감시는 기기가 주변에 내보내는 **알림 신호**를 보고, 추가 Bluetooth 탐색은 검색에 응답하는 기기를 찾습니다. 이미 연결된 기기끼리 주고받는 통신은 보지 못합니다.
+연속 감시는 기기가 주변에 내보내는 **알림 신호**를 보고, 추가 탐색은 검색에 응답하는 Bluetooth 기기와 시스템의 Wi-Fi Direct 목록을 확인합니다. 이미 연결된 기기끼리 주고받는 통신은 보지 못합니다.
 
 | 구분 | 예 |
 | --- | --- |
@@ -174,7 +174,7 @@ APK는 `app/build/outputs/apk/debug/app-debug.apk`에 생깁니다. 구조와 �
 
 KoriyoSCAN is an Android app for exam proctors. It records the Wi-Fi access points and Bluetooth Low Energy advertisements present in an empty room, then flags signals that were not in that record once the exam is under way, and helps walk toward one by signal strength.
 
-The development build also runs Bluetooth general discovery every two minutes, with separate baseline comparison and explicit stale/partial results. Discovery can include BLE results and only finds discoverable peers; it does not pair or connect. It cannot detect every device and misses cellular-only devices, wired or record-only cameras, and devices that neither advertise nor respond to discovery. It does not block signals and does not decide whether anyone cheated. Field accuracy has not been measured.
+The development build also runs Bluetooth general discovery followed by Wi-Fi Direct peer discovery every two minutes, with separate baseline comparison and explicit stale/partial results. Bluetooth discovery can include BLE results and only finds discoverable peers. Wi-Fi Direct exposes a system-reported peer list without RSSI or packet reception times, not all Wi-Fi clients. Neither path pairs or connects. It cannot detect every device and misses cellular-only devices, wired or record-only cameras, and devices that neither advertise nor respond to discovery. It does not block signals and does not decide whether anyone cheated. Field accuracy has not been measured.
 
 Records stay on the phone; the app declares no internet permission. The UI and the rest of this document are in Korean. Licensed under Apache-2.0; see [NOTICE](NOTICE) for the icon and bundled registry data.
 

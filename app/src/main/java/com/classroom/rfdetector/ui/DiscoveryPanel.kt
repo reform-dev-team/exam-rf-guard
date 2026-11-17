@@ -14,12 +14,13 @@ import java.util.Locale
 @Composable
 fun DiscoveryPanel(source: ScanSource, state: DiscoveryState, baseline: Map<String, Int>?, watching: Boolean, nowMs: Long) {
     var expanded by remember(source) { mutableStateOf(false) }
+    val p2p = source == ScanSource.WIFI_P2P
     val current = state.isCurrent(nowMs)
     val groups = discoveryGroups(source, state.peers, baseline)
     val increased = if (current && watching) groups.count { it.increased } else 0
     Surface(color = RfColors.surface, shape = MaterialTheme.shapes.medium) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Bluetooth 일반 탐색", fontWeight = FontWeight.Bold)
+            Text(if (p2p) "Wi-Fi Direct 탐색" else "Bluetooth 일반 탐색", fontWeight = FontWeight.Bold)
             Text("2분마다 추가 탐색 · 연속 수신과 별도", style = MaterialTheme.typography.labelSmall, color = RfColors.textDim)
             Text(when (state.status) {
                 DiscoveryStatus.IDLE -> "첫 탐색 대기"
@@ -42,15 +43,16 @@ fun DiscoveryPanel(source: ScanSource, state: DiscoveryState, baseline: Map<Stri
                 if (expanded) {
                     if (groups.isEmpty()) Text("이번 목록에 보고된 기기가 없습니다.", style = MaterialTheme.typography.bodySmall)
                     groups.forEach { group ->
-                        Text((group.peers.first().name?.takeIf { it.isNotBlank() } ?: "이름 없는 Bluetooth 기기") + " · ${group.peers.size}건", fontWeight = FontWeight.SemiBold)
+                        Text((group.peers.first().name?.takeIf { it.isNotBlank() } ?: if (p2p) "이름 없는 P2P 기기" else "이름 없는 Bluetooth 기기") + " · ${group.peers.size}건", fontWeight = FontWeight.SemiBold)
                         if (watching && group.baselineCount != null) Text("빈 교실 때 ${group.baselineCount}건 → 탐색 목록 ${group.peers.size}건", style = MaterialTheme.typography.labelSmall)
                         group.peers.forEach { peer ->
-                            Text(listOfNotNull(peer.kind, peer.rssi?.let { "탐색 때 세기 $it dBm" }).joinToString(" · "), style = MaterialTheme.typography.labelSmall)
+                            Text(listOfNotNull(peer.kind, peer.rssi?.takeUnless { p2p }?.let { "탐색 때 세기 $it dBm" }).joinToString(" · "), style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
             }
-            Text("검색에 응답하는 기기만 보입니다. BLE 목록과 같은 기기일 수 있으며 거리·실시간 위치를 뜻하지 않습니다.", style = MaterialTheme.typography.labelSmall, color = RfColors.textDim)
+            Text(if (p2p) "시스템이 보고한 P2P 목록입니다. 실제 패킷 수신 시각·세기·거리는 알 수 없으며 일반 Wi-Fi에 연결된 모든 기기를 찾지는 못합니다."
+                else "검색에 응답하는 기기만 보입니다. BLE 목록과 같은 기기일 수 있으며 거리·실시간 위치를 뜻하지 않습니다.", style = MaterialTheme.typography.labelSmall, color = RfColors.textDim)
         }
     }
 }

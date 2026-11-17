@@ -22,22 +22,26 @@ class DiscoveryMonitorTest {
             override val source = kind
             override suspend fun scan(): DiscoveryRound {
                 calls += source to SystemClock.elapsedRealtime()
+                val peers = if (calls.size >= 3) listOf(DiscoveryPeer("new", "New during exam")) else emptyList()
                 delay(1000)
-                return DiscoveryRound(DiscoveryStatus.COMPLETE, reportedAtMs = System.currentTimeMillis())
+                return DiscoveryRound(DiscoveryStatus.COMPLETE, peers, System.currentTimeMillis())
             }
         }
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-        val monitor = DiscoveryMonitor(listOf(scanner(ScanSource.BLUETOOTH_DISCOVERY), scanner(ScanSource.WIFI))) { collecting }
+        val monitor = DiscoveryMonitor(listOf(scanner(ScanSource.BLUETOOTH_DISCOVERY), scanner(ScanSource.WIFI_P2P))) { collecting }
         try {
             monitor.start(scope)
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(2))
-            assertEquals(listOf(ScanSource.BLUETOOTH_DISCOVERY, ScanSource.WIFI), calls.map { it.first })
+            assertEquals(listOf(ScanSource.BLUETOOTH_DISCOVERY, ScanSource.WIFI_P2P), calls.map { it.first })
             assertEquals(1000L, calls[1].second - calls[0].second)
             assertEquals(2, monitor.baselines.size)
             collecting = false
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(118))
             assertEquals(3, calls.size)
             assertEquals(DISCOVERY_PERIOD_MS, calls[2].second - calls[0].second)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+            assertEquals(1, monitor.states.value.getValue(ScanSource.BLUETOOTH_DISCOVERY).peers.size)
+            assertTrue(monitor.baselines.values.all { it.isEmpty() })
             monitor.stop()
             assertTrue(monitor.states.value.values.none { it.usable })
             val before = calls.size

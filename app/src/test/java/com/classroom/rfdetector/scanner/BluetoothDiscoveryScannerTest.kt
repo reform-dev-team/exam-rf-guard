@@ -88,4 +88,14 @@ class BluetoothDiscoveryScannerTest {
         start()
         assertEquals(DiscoveryStatus.FAILED, result!!.status)
     }
+
+    @Test fun anOldFinishBroadcastCannotCompleteAStillRunningNewDiscovery() {
+        start()
+        send(BluetoothAdapter.ACTION_DISCOVERY_STARTED)
+        send(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+        assertNull(result)
+        adapter.cancelDiscovery()
+        send(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+        assertEquals(DiscoveryStatus.COMPLETE, result!!.status)
+    }
 }

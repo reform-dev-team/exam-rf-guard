@@ -1,5 +1,12 @@
 # 변경 기록
 
+## Unreleased
+
+- Add sequential Bluetooth general discovery and Wi-Fi Direct peer discovery every two minutes while foreground scanning continues.
+- Compare completed discovery rounds with source-specific empty-room counts; preserve missing versus successful empty baselines in snapshot version 3.
+- Show report time, stale/partial results, and unsupported/busy/error states without claiming unique device counts or continuous ranging.
+- Keep snapshot versions 1 and 2 readable and retain the app's existing offline permissions.
+
 ## 1.0.0
 
 첫 공개판입니다.

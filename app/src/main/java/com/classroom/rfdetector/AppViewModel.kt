@@ -27,6 +27,7 @@ import com.classroom.rfdetector.scanner.BleScanner
 import com.classroom.rfdetector.scanner.WifiScanner
 import com.classroom.rfdetector.scanner.BluetoothDiscoveryScanner
 import com.classroom.rfdetector.scanner.DiscoveryMonitor
+import com.classroom.rfdetector.scanner.WifiP2pScanner
 import com.classroom.rfdetector.sim.RadioSimulator
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -76,7 +77,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
     /** 지금 감시에 쓰는 빈 교실 기록. null이면 아직 측정 전이다. */
     val baselineSnapshot = MutableStateFlow<SignalSnapshot?>(null)
     val baselineSet = MutableStateFlow(false)
-    private val discoveryMonitor = DiscoveryMonitor(listOf(BluetoothDiscoveryScanner(app))) { !baselineSet.value }
+    private val discoveryMonitor = DiscoveryMonitor(listOf(BluetoothDiscoveryScanner(app), WifiP2pScanner(app))) { !baselineSet.value }
     val discoveries = discoveryMonitor.states
     /** 앱을 다시 열었을 때 이어 쓸 수 있는, 마지막으로 저장한 빈 교실 기록. */
     val savedBaseline = MutableStateFlow<SignalSnapshot?>(null)

@@ -163,7 +163,7 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                                     val accent = if (!watching) RfColors.textDim else if (found || incomplete) RfColors.warning else RfColors.ok
                                     Box(Modifier.size(48.dp).background(accent, CircleShape), contentAlignment = Alignment.Center) {
-                                        if (watching && found) Text("${watch.count + extraCount}", color = RfColors.bg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
+                                        if (watching && found) Text(if (extraCount > 0) "!" else "${watch.count}", color = RfColors.bg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
                                         else if (incomplete) Text("!", color = RfColors.bg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
                                         else RfGlyph(RfSymbol.CHECK, size = 28.dp, color = RfColors.bg)
                                     }
@@ -176,6 +176,7 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                                     }, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = if (watching) accent else RfColors.textPrimary)
                                 }
                                 Text(if (watching) "감시 중 · ${minSec(elapsed)} 경과" else "지금은 전파를 받지 않습니다")
+                                if (watching && watch.count > 0 && extraCount > 0) Text("추가 탐색 확인 후보 ${extraCount}종", color = RfColors.warning)
                                 if (watching) Text(when {
                                     watch.count > 0 -> "빈 교실에 없던 전파가 지금 잡히고 있습니다. 줄을 눌러 다가가며 세기를 확인하세요. 사라지면 목록에서 빠집니다."
                                     extraCount > 0 -> "추가 탐색 목록에서 빈 교실 때보다 늘어난 후보가 있습니다. 아래 탐색 시각과 목록을 확인하세요. 건수는 고유한 기기 대수가 아닙니다."
@@ -340,7 +341,7 @@ fun GuideScreen() {
         }
         GuardPanel {
             Text("이 앱이 보는 것", fontWeight = FontWeight.Bold)
-            Text("Wi-Fi 접속점과 BLE 알림 신호를 연속 감시하고, 2분마다 Bluetooth 일반 탐색을 추가로 실행합니다. 일반 탐색은 검색 가능한 기기만 찾으며 BLE 목록과 중복될 수 있습니다. 추가 탐색은 거리를 재지 않습니다. 기기끼리 이미 연결되어 주고받는 내용은 보지 못합니다.", style = MaterialTheme.typography.bodyMedium)
+            Text("Wi-Fi 접속점과 BLE 알림 신호를 연속 감시하고, 2분마다 Bluetooth 일반 탐색과 Wi-Fi Direct 탐색을 차례로 실행합니다. 일반 탐색은 검색 가능한 기기만 찾으며 BLE 목록과 중복될 수 있습니다. Wi-Fi Direct는 시스템의 P2P 목록이며 모든 Wi-Fi 단말을 찾지는 못합니다. 추가 탐색은 거리를 재지 않습니다. 기기끼리 이미 연결되어 주고받는 내용은 보지 못합니다.", style = MaterialTheme.typography.bodyMedium)
         }
         Surface(color = okDim, shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

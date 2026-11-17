@@ -45,4 +45,15 @@ class DiscoveryPanelTest {
         } }
         compose.onNodeWithText("빈 교실 때보다 늘어난 후보 1종").assertExists()
     }
+
+    @Test fun p2pListsNeverOfferStrengthOrDistanceEvenIfAnInvalidSampleContainsRssi() {
+        compose.setContent { AppRfTheme {
+            DiscoveryPanel(ScanSource.WIFI_P2P,
+                DiscoveryState(DiscoveryStatus.COMPLETE, listOf(peer), 1000, 1000, usable = true), emptyMap(), true, 2000)
+        } }
+        compose.onNodeWithText("Wi-Fi Direct 탐색").assertExists()
+        compose.onNodeWithText("탐색 목록 1건 · 펼치기").performClick()
+        compose.onNodeWithText("탐색 때 세기", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("실제 패킷 수신 시각·세기·거리는 알 수 없으며", substring = true).assertExists()
+    }
 }
