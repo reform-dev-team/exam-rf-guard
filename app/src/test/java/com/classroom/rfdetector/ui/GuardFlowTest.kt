@@ -97,6 +97,24 @@ class GuardFlowTest {
         } finally { vm.shutdown() }
     }
 
+    @Test fun resetDuringMeasuringAsksBeforeDiscarding() {
+        val vm = launch()
+        try {
+            compose.onNodeWithText("빈 교실 측정 시작").performClick()
+            compose.waitUntil(10_000) { vm.devices.value.isNotEmpty() }
+            // 초기화는 모은 빈 교실 전파를 저장하지 않고 버린다. 잘못 눌러도 측정이 끝나지 않아야 한다.
+            compose.onNodeWithText("초기화").performScrollTo().performClick()
+            compose.onNodeWithText("측정을 그만둘까요?").assertExists()
+            compose.onNodeWithText("계속 측정").performClick()
+            assertTrue(vm.scanning.value)
+
+            compose.onNodeWithText("초기화").performScrollTo().performClick()
+            compose.onNodeWithText("그만두기").performClick()
+            compose.runOnIdle { assertTrue(!vm.scanning.value) }
+            waitForText("빈 교실 측정 시작")
+        } finally { vm.shutdown() }
+    }
+
     @Test fun confirmedSignalLeavesTheListAndLeavingTheAppKeepsWatching() {
         val vm = launch()
         try {
