@@ -17,6 +17,7 @@ class DiscoveryMonitor(private val scanners: List<DiscoveryScanner>, private val
     private val mutableStates = MutableStateFlow(tracker.states)
     val states: StateFlow<Map<ScanSource, DiscoveryState>> = mutableStates
     val baselines: Map<ScanSource, Map<String, Int>> get() = tracker.baselines
+    val baselineAddresses: Map<ScanSource, Map<String, String>> get() = tracker.baselineAddresses
     private var job: Job? = null
 
     fun reset() {

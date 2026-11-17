@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix false discovery candidates when an already observed address later supplies or changes its name; persist source-scoped baseline address references and require remeasurement of older nonempty periodic baselines without them.
 - Add sequential Bluetooth general discovery and Wi-Fi Direct peer discovery every two minutes while foreground scanning continues.
 - Compare completed discovery rounds with source-specific empty-room counts; preserve missing versus successful empty baselines in snapshot version 3.
 - Show report time, stale/partial results, and unsupported/busy/error states without claiming unique device counts or continuous ranging.

@@ -37,6 +37,54 @@ class SnapshotStoreTest {
         assertEquals(snapshot, SnapshotStore(directory.root).load().single())
     }
 
+    @Test fun discoveryAddressReferencesSuppressLateNamesAfterReopeningTheBaseline() {
+        for (source in listOf(ScanSource.BLUETOOTH_DISCOVERY, ScanSource.WIFI_P2P)) {
+            val tracker = DiscoveryTracker(listOf(source))
+            tracker.finish(source, DiscoveryRound(DiscoveryStatus.COMPLETE,
+                listOf(DiscoveryPeer("AA:BB:CC:DD:EE:FF", null)), 1000), collecting = true)
+            val snapshot = SignalSnapshot("Room", 1000, false, emptyList(), tracker.baselines, tracker.baselineAddresses)
+            SnapshotStore(directory.root).save(listOf(snapshot))
+            val loaded = SnapshotStore(directory.root).load().single()
+            assertEquals(snapshot, loaded)
+            val renamed = DiscoveryPeer("aa:bb:cc:dd:ee:ff", "Accessory")
+            val group = discoveryGroups(source, listOf(renamed), loaded.discoveryBaseline(source), loaded.discoveryBaselineAddresses.getValue(source)).single()
+            assertFalse(group.increased)
+            assertEquals(1, group.baselineCount)
+            assertEquals("Accessory", group.peers.single().name)
+        }
+    }
+
+    @Test fun oldVersionThreeCountsStayReadableButNonemptySourcesNeedAddressReferencesForComparison() {
+        File(directory.root, "signal-snapshots.json").writeText("""{"version":3,"snapshots":[{"area":"Room","capturedAtMs":1000,"simulation":false,"signals":[],"discoveryBaselines":{"BLUETOOTH_DISCOVERY":{"BLUETOOTH_DISCOVERY:unknown":1},"WIFI_P2P":{}}}]}""")
+        val loaded = SnapshotStore(directory.root).load().single()
+        assertEquals(1, loaded.discoveryBaselines.getValue(ScanSource.BLUETOOTH_DISCOVERY).values.single())
+        assertNull(loaded.discoveryBaseline(ScanSource.BLUETOOTH_DISCOVERY))
+        assertEquals(emptyMap<String, Int>(), loaded.discoveryBaseline(ScanSource.WIFI_P2P))
+        assertTrue(loaded.discoveryBaselineAddresses.isEmpty())
+        val group = discoveryGroups(ScanSource.BLUETOOTH_DISCOVERY, listOf(DiscoveryPeer("AA", "Accessory")),
+            loaded.discoveryBaseline(ScanSource.BLUETOOTH_DISCOVERY)).single()
+        assertNull(group.baselineCount)
+        assertFalse(group.increased)
+    }
+
+    @Test fun storedAddressReferencesAreNormalizedWhenReading() {
+        val source = ScanSource.BLUETOOTH_DISCOVERY
+        val groupKey = discoveryGroupKey(source, null)
+        val snapshot = SignalSnapshot("Room", 1000, false, emptyList(), mapOf(source to mapOf(groupKey to 1)),
+            mapOf(source to mapOf("aa:bb:cc:dd:ee:ff" to groupKey)))
+        SnapshotStore(directory.root).save(listOf(snapshot))
+        assertEquals(groupKey, SnapshotStore(directory.root).load().single().discoveryBaselineAddresses.getValue(source)["AA:BB:CC:DD:EE:FF"])
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun addressReferencesCannotCreateAnUnmeasuredBaselineGroup() {
+        val source = ScanSource.BLUETOOTH_DISCOVERY
+        val snapshot = SignalSnapshot("Room", 1000, false, emptyList(), mapOf(source to emptyMap()),
+            mapOf(source to mapOf("AA" to discoveryGroupKey(source, "Unmeasured"))))
+        SnapshotStore(directory.root).save(listOf(snapshot))
+        SnapshotStore(directory.root).load()
+    }
+
     @Test fun presenceCompanyIdsAndHintsSurviveReopen() {
         val signal = SnapshotSignal("earbud", ScanSource.BLE, "AirPods Pro", -65.0, "Apple", SignalPresence.HISTORY,
             setOf(76), setOf(SignalHint.APPLE_AUDIO))

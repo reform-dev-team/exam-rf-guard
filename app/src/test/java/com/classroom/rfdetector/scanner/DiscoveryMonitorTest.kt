@@ -42,6 +42,7 @@ class DiscoveryMonitorTest {
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
             assertEquals(1, monitor.states.value.getValue(ScanSource.BLUETOOTH_DISCOVERY).peers.size)
             assertTrue(monitor.baselines.values.all { it.isEmpty() })
+            assertTrue(monitor.baselineAddresses.values.all { it.isEmpty() })
             monitor.stop()
             assertTrue(monitor.states.value.values.none { it.usable })
             val before = calls.size

@@ -239,7 +239,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
         if (!scanning.value || snapshotBusy.value || (devices.value.isEmpty() && discoveryMonitor.baselines.isEmpty())) return
         refresh()
         val snapshot = SignalSnapshot.capture(session.area, System.currentTimeMillis(), simMode.value, devices.value)
-            .copy(discoveryBaselines = discoveryMonitor.baselines)
+            .copy(discoveryBaselines = discoveryMonitor.baselines, discoveryBaselineAddresses = discoveryMonitor.baselineAddresses)
         snapshotBusy.value = true
         snapshotError.value = null
         storageScope.launch {

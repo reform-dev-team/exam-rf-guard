@@ -37,8 +37,13 @@ data class DiscoveryGroup(val key: String, val peers: List<DiscoveryPeer>, val b
     val increased: Boolean get() = baselineCount != null && peers.size > baselineCount
 }
 
-fun discoveryGroups(source: ScanSource, peers: List<DiscoveryPeer>, baseline: Map<String, Int>?): List<DiscoveryGroup> =
-    peers.distinctBy { it.address.uppercase(Locale.ROOT) }.groupBy { discoveryGroupKey(source, it.name) }
+fun discoveryGroups(source: ScanSource, peers: List<DiscoveryPeer>, baseline: Map<String, Int>?,
+    baselineAddresses: Map<String, String> = emptyMap()): List<DiscoveryGroup> =
+    peers.distinctBy { it.address.uppercase(Locale.ROOT) }.groupBy { peer ->
+        // A later name is metadata for an observed address, not an additional baseline slot.
+        baselineAddresses[peer.address.uppercase(Locale.ROOT)]?.takeIf { baseline?.containsKey(it) == true }
+            ?: discoveryGroupKey(source, peer.name)
+    }
         .map { (key, members) -> DiscoveryGroup(key, members, baseline?.let { it[key] ?: 0 }) }
         .sortedWith(compareByDescending<DiscoveryGroup> { it.increased }.thenBy { it.key })
 
@@ -49,8 +54,16 @@ class DiscoveryTracker(sources: List<ScanSource>) {
         private set
     var baselines: Map<ScanSource, Map<String, Int>> = emptyMap()
         private set
+    var baselineAddresses: Map<ScanSource, Map<String, String>> = emptyMap()
+        private set
+    private val baselineRounds = mutableMapOf<ScanSource, MutableList<Set<String>>>()
 
-    fun reset() { states = initial; baselines = emptyMap() }
+    fun reset() {
+        states = initial
+        baselines = emptyMap()
+        baselineAddresses = emptyMap()
+        baselineRounds.clear()
+    }
 
     fun begin(source: ScanSource) {
         states = states + (source to states.getValue(source).copy(status = DiscoveryStatus.SCANNING, message = null))
@@ -65,11 +78,25 @@ class DiscoveryTracker(sources: List<ScanSource>) {
             if (success || peers.isNotEmpty()) round.reportedAtMs else previous.reportedAtMs,
             if (success) round.reportedAtMs else previous.lastSuccessAtMs, round.message, success))
         if (success && collecting) {
-            val counts = discoveryGroups(source, peers, null).associate { it.key to it.peers.size }
-            val previousCounts = baselines[source].orEmpty()
-            baselines = baselines + (source to (previousCounts.keys + counts.keys).associateWith {
-                maxOf(previousCounts[it] ?: 0, counts[it] ?: 0)
-            })
+            val addresses = baselineAddresses[source].orEmpty().toMutableMap()
+            peers.forEach { peer ->
+                val address = peer.address.uppercase(Locale.ROOT)
+                if (address !in addresses || !peer.name.isNullOrBlank()) {
+                    addresses[address] = discoveryGroupKey(source, peer.name)
+                }
+            }
+            val rounds = baselineRounds.getOrPut(source) { mutableListOf() }
+            rounds += peers.map { it.address.uppercase(Locale.ROOT) }.toSet()
+            // Reclassify earlier rounds when a name arrives during collection. Keeping the old
+            // unknown count as well would count one address in two different baseline groups.
+            val counts = mutableMapOf<String, Int>()
+            rounds.forEach { roundAddresses ->
+                roundAddresses.groupingBy { addresses.getValue(it) }.eachCount().forEach { (key, count) ->
+                    counts[key] = maxOf(counts[key] ?: 0, count)
+                }
+            }
+            baselineAddresses = baselineAddresses + (source to addresses.toMap())
+            baselines = baselines + (source to counts.toMap())
         }
     }
 

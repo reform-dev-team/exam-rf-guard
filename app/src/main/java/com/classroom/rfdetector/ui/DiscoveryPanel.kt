@@ -12,11 +12,12 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun DiscoveryPanel(source: ScanSource, state: DiscoveryState, baseline: Map<String, Int>?, watching: Boolean, nowMs: Long) {
+fun DiscoveryPanel(source: ScanSource, state: DiscoveryState, baseline: Map<String, Int>?, watching: Boolean, nowMs: Long,
+    baselineAddresses: Map<String, String> = emptyMap()) {
     var expanded by remember(source) { mutableStateOf(false) }
     val p2p = source == ScanSource.WIFI_P2P
     val current = state.isCurrent(nowMs)
-    val groups = discoveryGroups(source, state.peers, baseline)
+    val groups = discoveryGroups(source, state.peers, baseline, baselineAddresses)
     val increased = if (current && watching) groups.count { it.increased } else 0
     Surface(color = RfColors.surface, shape = MaterialTheme.shapes.medium) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -36,17 +37,22 @@ fun DiscoveryPanel(source: ScanSource, state: DiscoveryState, baseline: Map<Stri
             state.reportedAtMs?.let {
                 Text("목록 수신 ${SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(it))}", style = MaterialTheme.typography.labelSmall)
             }
-            if (watching && baseline == null) Text("이 경로의 빈 교실 기준 기록이 없습니다. 비교하려면 빈 교실부터 다시 측정하세요.", style = MaterialTheme.typography.bodySmall)
+            if (watching && baseline == null) Text("이 경로에는 비교에 필요한 기준 정보가 없습니다. 빈 교실부터 다시 측정하세요.", style = MaterialTheme.typography.bodySmall)
             if (current && watching && baseline != null) Text("빈 교실 때보다 늘어난 후보 ${increased}종", color = if (increased > 0) RfColors.warning else RfColors.textDim)
             if (state.reportedAtMs != null) {
                 TextButton(onClick = { expanded = !expanded }) { Text("탐색 목록 ${state.peers.size}건 · ${if (expanded) "접기" else "펼치기"}") }
                 if (expanded) {
                     if (groups.isEmpty()) Text("이번 목록에 보고된 기기가 없습니다.", style = MaterialTheme.typography.bodySmall)
                     groups.forEach { group ->
-                        Text((group.peers.first().name?.takeIf { it.isNotBlank() } ?: if (p2p) "이름 없는 P2P 기기" else "이름 없는 Bluetooth 기기") + " · ${group.peers.size}건", fontWeight = FontWeight.SemiBold)
+                        val mixedNames = group.peers.map { it.name?.trim()?.takeIf { name -> name.isNotEmpty() } }.distinct().size > 1
+                        val label = if (mixedNames) "이름이 다른 탐색 결과"
+                            else group.peers.first().name?.takeIf { it.isNotBlank() } ?: if (p2p) "이름 없는 P2P 기기" else "이름 없는 Bluetooth 기기"
+                        Text("$label · ${group.peers.size}건", fontWeight = FontWeight.SemiBold)
                         if (watching && group.baselineCount != null) Text("빈 교실 때 ${group.baselineCount}건 → 탐색 목록 ${group.peers.size}건", style = MaterialTheme.typography.labelSmall)
                         group.peers.forEach { peer ->
-                            Text(listOfNotNull(peer.kind, peer.rssi?.takeUnless { p2p }?.let { "탐색 때 세기 $it dBm" }).joinToString(" · "), style = MaterialTheme.typography.labelSmall)
+                            if (mixedNames) Text(peer.name?.takeIf { it.isNotBlank() } ?: "이름 없음", style = MaterialTheme.typography.bodySmall)
+                            val details = listOfNotNull(peer.kind, peer.rssi?.takeUnless { p2p }?.let { "탐색 때 세기 $it dBm" }).joinToString(" · ")
+                            if (details.isNotEmpty()) Text(details, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }

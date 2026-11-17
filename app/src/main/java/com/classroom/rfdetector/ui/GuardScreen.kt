@@ -150,10 +150,11 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                 GuardPhase.WATCH, GuardPhase.ENDED -> {
                     val watching = phase == GuardPhase.WATCH
                     val extraCount = if (watching && !simulation) discoveries.entries.sumOf { (source, state) ->
-                        if (state.isCurrent(tick)) discoveryGroups(source, state.peers, baseline?.discoveryBaselines?.get(source)).count { it.increased } else 0
+                        if (state.isCurrent(tick)) discoveryGroups(source, state.peers, baseline?.discoveryBaseline(source),
+                            baseline?.discoveryBaselineAddresses?.get(source).orEmpty()).count { it.increased } else 0
                     } else 0
                     val extraIncomplete = !simulation && discoveries.any { (source, state) ->
-                        !state.isCurrent(tick) || baseline?.discoveryBaselines?.containsKey(source) != true
+                        !state.isCurrent(tick) || baseline?.discoveryBaseline(source) == null
                     }
                     val found = watch.count > 0 || extraCount > 0
                     item {
@@ -215,7 +216,8 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
             if (!simulation && phase != GuardPhase.READY) {
                 discoveries.forEach { (source, state) ->
                     item {
-                        DiscoveryPanel(source, state, baseline?.discoveryBaselines?.get(source), baselineSet, maxOf(tick, System.currentTimeMillis()))
+                        DiscoveryPanel(source, state, baseline?.discoveryBaseline(source), baselineSet, maxOf(tick, System.currentTimeMillis()),
+                            baseline?.discoveryBaselineAddresses?.get(source).orEmpty())
                     }
                 }
             }
