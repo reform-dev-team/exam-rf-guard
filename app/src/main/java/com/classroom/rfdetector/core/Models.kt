@@ -15,7 +15,8 @@ enum class SignalPresence {
 
 /** pauses·pausedMs: 앱을 벗어나 수신이 멈췄던 횟수와 총 시간. 그 사이의 신호는 기록되지 않는다. */
 data class ScanSession(val id: String, val startedAtMs: Long, val area: String,
-    val pauses: Int = 0, val pausedMs: Long = 0)
+    val pauses: Int = 0, val pausedMs: Long = 0,
+    val recoveries: Int = 0, val uncertainMs: Long = 0)
 
 /** 거리 등급 — RSSI 기반 추정이며 실제 거리 측정이 아니다. */
 enum class DistanceClass(val label: String) {
