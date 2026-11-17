@@ -39,6 +39,16 @@ class DeviceIdentityTest {
         assertEquals(setOf(76), tracker.snapshot(1100).single().manufacturerIds)
     }
 
+    @Test fun refreshedAssignmentsResolveThroughTheBundledRegistries() {
+        val vendors = File("src/main/assets/mac-vendors.tsv").readLines().associate { it.substringBefore('\t') to it.substringAfter('\t') }
+        val companies = File("src/main/assets/bluetooth-companies.tsv").readLines().associate { it.substringBefore('\t').toInt() to it.substringAfter('\t') }
+        val bundled = DeviceIdentityResolver(vendors, companies)
+        assertEquals("Microsoft Corporation", bundled.resolve("64:2F:4F:00:00:01", null, setOf(ScanSource.WIFI), emptySet()).macOrganization)
+        assertNull(bundled.resolve("66:2F:4F:00:00:01", null, setOf(ScanSource.WIFI), emptySet()).macOrganization)
+        assertEquals(listOf("LightingSoft AG", "AutoStoa LLC"),
+            bundled.resolve("DA:11:22:33:44:55", null, setOf(ScanSource.BLE), setOf(4430, 4429)).advertisedCompanies)
+    }
+
     @Test fun bundledOfficialRegistriesAreWellFormed() {
         val vendors = File("src/main/assets/mac-vendors.tsv").readLines().associate { it.substringBefore('\t') to it.substringAfter('\t') }
         val companies = File("src/main/assets/bluetooth-companies.tsv").readLines().associate { it.substringBefore('\t').toInt() to it.substringAfter('\t') }

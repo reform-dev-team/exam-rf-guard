@@ -1,5 +1,5 @@
 KoriyoSCAN identity registry data
-Retrieved 2026-11-16 (Asia/Seoul).
+Retrieved 2026-11-16 (US Eastern) / 2026-11-17 (Asia/Seoul).
 
 mac-vendors.tsv: 24-bit MA-L assignments from IEEE Registration Authority.
 Source: https://standards-oui.ieee.org/oui/oui.csv
@@ -7,6 +7,8 @@ Columns retained: Assignment and Organization Name. Addresses omitted.
 Only globally administered unicast addresses are queried. BLE matches are
 registration candidates: a random BLE address can coincide with a registered OUI.
 No MA-M/MA-S lookup or model inference from an OUI is performed.
+Entries: 40509.
+Normalized TSV SHA-256: 6b26e43ebc5ba8202f331318855f3d03588411b17debdf1f5ee7807e0c2f96fa
 
 bluetooth-companies.tsv: Bluetooth SIG Company Identifiers.
 Source: https://bitbucket.org/bluetooth-SIG/public/raw/main/assigned_numbers/company_identifiers/company_identifiers.yaml
@@ -14,6 +16,8 @@ Official index: https://www.bluetooth.com/specifications/assigned-numbers/
 Columns retained: decimal company identifier and company name.
 Identifiers indicate the company responsible for manufacturer-specific advertising
 data; they do not certify the physical device brand or model.
+Entries: 4077.
+Normalized TSV SHA-256: dc0495ce1751908379639e65bddbdc7d283dd368e66d43489933645cab77a516
 
 The files contain factual registry entries and retain official organization
 names. The files ship with the app; scans and address lookups do not contact a

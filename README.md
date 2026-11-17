@@ -157,7 +157,7 @@ APK는 `app/build/outputs/apk/debug/app-debug.apk`에 생깁니다. 구조와 �
 
 ## 출처
 
-제조사 정보는 앱에 포함한 공개 등록부(2026년 11월 16일 수집)를 씁니다. 실시간 조회가 아닙니다.
+제조사 정보는 앱에 포함한 공개 등록부(2026년 11월 16일 미국 동부 / 17일 한국 시각 수집)를 씁니다. 실시간 조회가 아닙니다.
 
 - [IEEE OUI 등록부](https://standards-oui.ieee.org/oui/oui.csv)
 - [Bluetooth SIG 회사 식별자](https://www.bluetooth.com/specifications/assigned-numbers/)
