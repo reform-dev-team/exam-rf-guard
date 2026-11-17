@@ -21,6 +21,14 @@ class DeviceTracker {
 
     private val tracks = ConcurrentHashMap<String, Track>()
 
+    private companion object {
+        /**
+         * 받을 수 있는 수신 세기 범위. Android는 세기를 모를 때 127을 준다(`ScanResult.getRssi`).
+         * 이 값을 세기로 쓰면 "가장 셀 때"와 평균 세기, 거리 등급이 실제보다 크게 틀린다. 범위 밖이면 수신만 센다.
+         */
+        val VALID_RSSI = -127..20
+    }
+
     @Synchronized
     fun update(obs: RfObservation) {
         val firstObservation = !tracks.containsKey(obs.trackingKey)
@@ -38,9 +46,10 @@ class DeviceTracker {
         if (!late) t.details.putAll(obs.details)
         if (!late || t.name == null) obs.name?.takeIf { it.isNotBlank() }?.let { t.name = it }
         if (!late) t.hidden = obs.hidden
-        obs.rssi?.let { r ->
+        if (!late && t.periods.size > previousPeriodCount) t.ema = null
+        obs.rssi?.takeIf { it in VALID_RSSI }?.let { r ->
             if (!late) {
-                t.ema = RssiFilter.ema(if (t.periods.size > previousPeriodCount) null else t.ema, r)
+                t.ema = RssiFilter.ema(t.ema, r)
                 t.tx = obs.txPower?.takeIf { it in -100..20 && it != 127 }?.toDouble() ?: t.tx
             }
             t.peakRssi = maxOf(t.peakRssi ?: r, r)
