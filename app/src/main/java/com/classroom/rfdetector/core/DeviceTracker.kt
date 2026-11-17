@@ -51,7 +51,7 @@ class DeviceTracker {
     fun snapshot(nowMs: Long, includeInactive: Boolean = false): List<TrackedDevice> {
         return tracks.values.filter { includeInactive || nowMs - it.lastSeen <= 90_000L }.map { t ->
             val rssi = t.ema
-            val dist = rssi?.let { RssiFilter.distanceM(it, t.tx ?: RssiFilter.DEFAULT_TX_DBM) }
+            val dist = rssi?.let { RssiFilter.distanceM(it, t.tx ?: RssiFilter.defaultReferenceAt1m(t.source)) }
             val ageMs = (nowMs - t.lastSeen).coerceAtLeast(0)
             val presence = signalPresence(t.source, t.lastSeen, nowMs)
             TrackedDevice(

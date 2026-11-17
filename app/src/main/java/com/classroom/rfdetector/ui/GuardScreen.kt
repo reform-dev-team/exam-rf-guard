@@ -274,7 +274,7 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
                 Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     ProximityBars(device, barWidth = 44.dp, maxHeight = 150.dp)
                     Text(proximityLabel(device), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = accent)
-                    if (live) estimateDistance(device.rssiEma, device.referenceRssiAt1m)?.let { Text("${it.label} 추정", color = RfColors.textDim) }
+                    if (live) estimateDistance(device.rssiEma, device.referenceRssiAt1m, device.source)?.let { Text("${it.label} 추정", color = RfColors.textDim) }
                 }
             }
             Text(if (live) "휴대폰을 들고 천천히 걸어 보세요. 막대가 늘어나는 쪽에 기기가 있습니다." else "지금은 잡히지 않습니다. 다시 나타나면 막대가 올라갑니다.")

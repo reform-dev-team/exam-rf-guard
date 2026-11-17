@@ -6,10 +6,10 @@ data class DistanceEstimate(val meters: Double) {
     val label: String get() = "약 ${formatMeters(meters)} m"
 }
 
-fun estimateDistance(rssi: Double?, referenceRssiAt1m: Double? = null): DistanceEstimate? {
+fun estimateDistance(rssi: Double?, referenceRssiAt1m: Double? = null, source: ScanSource = ScanSource.BLE): DistanceEstimate? {
     if (rssi == null || !rssi.isFinite() || rssi !in -127.0..-1.0) return null
     val calibrated = referenceRssiAt1m?.takeIf { it.isFinite() && it in -100.0..20.0 }
-    val reference = calibrated ?: RssiFilter.DEFAULT_TX_DBM
+    val reference = calibrated ?: RssiFilter.defaultReferenceAt1m(source)
     return DistanceEstimate(RssiFilter.distanceM(rssi, reference))
 }
 
