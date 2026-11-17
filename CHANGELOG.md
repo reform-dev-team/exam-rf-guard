@@ -1,5 +1,13 @@
 # 변경 기록
 
+## Unreleased
+
+- Fix false discovery candidates when an already observed address later supplies or changes its name; persist source-scoped baseline address references and require remeasurement of older nonempty periodic baselines without them.
+- Add sequential Bluetooth general discovery and Wi-Fi Direct peer discovery every two minutes while foreground scanning continues.
+- Compare completed discovery rounds with source-specific empty-room counts; preserve missing versus successful empty baselines in snapshot version 3.
+- Show report time, stale/partial results, and unsupported/busy/error states without claiming unique device counts or continuous ranging.
+- Keep snapshot versions 1 and 2 readable and retain the app's existing offline permissions.
+
 ## 1.0.1
 
 - 측정·감시 중에 뒤로 가기를 누르면 먼저 그만둘지 묻습니다. 전에는 Android 11 이하에서 뒤로 가기 한 번에 앱이 닫혀, 확인 없이 측정·감시가 끝나고 "확인함" 목록도 사라졌습니다.

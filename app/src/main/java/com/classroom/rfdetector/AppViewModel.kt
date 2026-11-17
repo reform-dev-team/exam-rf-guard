@@ -25,6 +25,9 @@ import com.classroom.rfdetector.core.baselineWifiAddresses
 import com.classroom.rfdetector.core.watchView
 import com.classroom.rfdetector.scanner.BleScanner
 import com.classroom.rfdetector.scanner.WifiScanner
+import com.classroom.rfdetector.scanner.BluetoothDiscoveryScanner
+import com.classroom.rfdetector.scanner.DiscoveryMonitor
+import com.classroom.rfdetector.scanner.WifiP2pScanner
 import com.classroom.rfdetector.sim.RadioSimulator
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -74,6 +77,8 @@ class AppViewModel(private val app: Context) : ViewModel() {
     /** 지금 감시에 쓰는 빈 교실 기록. null이면 아직 측정 전이다. */
     val baselineSnapshot = MutableStateFlow<SignalSnapshot?>(null)
     val baselineSet = MutableStateFlow(false)
+    private val discoveryMonitor = DiscoveryMonitor(listOf(BluetoothDiscoveryScanner(app), WifiP2pScanner(app))) { !baselineSet.value }
+    val discoveries = discoveryMonitor.states
     /** 앱을 다시 열었을 때 이어 쓸 수 있는, 마지막으로 저장한 빈 교실 기록. */
     val savedBaseline = MutableStateFlow<SignalSnapshot?>(null)
     val snapshotBusy = MutableStateFlow(true)
@@ -162,6 +167,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
                 pausedMs = paused.pausedMs + (System.currentTimeMillis() - resumedPauseAtMs!!).coerceAtLeast(0))
         } else {
             acknowledged.value = emptySet()
+            discoveryMonitor.reset()
             tracker.clear()
             _devices.value = emptyList()
             watch.value = WatchView()
@@ -181,6 +187,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
         } else {
             if (ble.isUsable()) ble.start(::onObservation)
             wifi.start(::onObservation)
+            discoveryMonitor.start(scope)
         }
         refreshJob = scope.launch {
             while (isActive) {
@@ -214,6 +221,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
         refreshJob?.cancel(); refreshJob = null
         ble.stop()
         wifi.stop()
+        discoveryMonitor.stop()
         if (geigerOn.value) setGeiger(false)
     }
 
@@ -228,9 +236,10 @@ class AppViewModel(private val app: Context) : ViewModel() {
     /** 지금까지 잡힌 전파 전부를 이 교실에 원래 있던 것으로 저장하고 감시를 시작한다. */
     fun takeBaseline() {
         val session = scanSession.value ?: return
-        if (!scanning.value || snapshotBusy.value || devices.value.isEmpty()) return
+        if (!scanning.value || snapshotBusy.value || (devices.value.isEmpty() && discoveryMonitor.baselines.isEmpty())) return
         refresh()
         val snapshot = SignalSnapshot.capture(session.area, System.currentTimeMillis(), simMode.value, devices.value)
+            .copy(discoveryBaselines = discoveryMonitor.baselines, discoveryBaselineAddresses = discoveryMonitor.baselineAddresses)
         snapshotBusy.value = true
         snapshotError.value = null
         storageScope.launch {

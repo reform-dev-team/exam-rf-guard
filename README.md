@@ -8,10 +8,14 @@
 
 > **이 앱은 모든 기기를 탐지하지 못합니다.** 전파를 차단하지 않고, 부정행위 여부를 판정하지 않으며, 육안 감독을 대체하지 않습니다. 실제 시험장에서의 수신률·누락률은 검증하지 않았습니다.
 
+개발판은 2분마다 Bluetooth 일반 탐색과 Wi-Fi Direct 탐색을 차례로 실행합니다. 결과는 연속 감시와 별도이며, 같은 기기가 여러 경로에 나타날 수 있습니다. 완료·실패·부분 결과와 목록 수신 시각을 구분합니다. 이전 버전의 빈 교실 기록에는 이 경로들의 기준이 없으므로 비교하려면 다시 측정해야 합니다. Wi-Fi Direct는 시스템이 보고하는 P2P 목록이며 모든 Wi-Fi 단말을 찾지는 못합니다. [추가 탐색 설계와 검증](docs/PERIODIC-DISCOVERY.md)
+
+추가 탐색에서 같은 출처·주소의 이름이 뒤늦게 붙거나 바뀌어도 기존 기준 묶음과 연결합니다. 이름별 개수만 저장했던 이전 개발판 기록은 주소 연결 정보가 없으므로, 해당 경로를 비교하려면 빈 교실에서 다시 측정해야 합니다. 기존 기록의 연속 감시 데이터는 그대로 읽습니다.
+
 | 항목 | 내용 |
 | --- | --- |
 | 지원 환경 | Android 10(API 29) 이상. 아이폰은 지원하지 않습니다. |
-| 보는 것 | 와이파이 접속점(공유기·핫스팟)과 저전력 블루투스(BLE) 알림 신호 |
+| 보는 것 | 와이파이 접속점과 BLE 알림 신호 연속 감시, Bluetooth 일반 탐색·Wi-Fi Direct 탐색 2분 주기 |
 | 데이터 | 휴대폰 안에만 저장합니다. 앱에 인터넷 권한이 없습니다. |
 | 측정 조건 | 비행기 모드가 켜져 있어야 시작됩니다. 측정·감시 중에는 휴대폰을 자동으로 무음(방해 금지)으로 바꿉니다. |
 | 화면 | 감독관 화면, 위치 찾기, 안내 |
@@ -86,13 +90,13 @@
 
 ## 탐지 범위
 
-앱이 보는 것은 기기가 주변에 내보내는 **알림 신호**뿐입니다. 이미 연결된 기기끼리 주고받는 통신은 보지 못합니다.
+연속 감시는 기기가 주변에 내보내는 **알림 신호**를 보고, 추가 탐색은 검색에 응답하는 Bluetooth 기기와 시스템의 Wi-Fi Direct 목록을 확인합니다. 이미 연결된 기기끼리 주고받는 통신은 보지 못합니다.
 
 | 구분 | 예 |
 | --- | --- |
 | 탐지 | 자체 와이파이를 여는 카메라, 핫스팟을 켠 휴대폰, 휴대용 와이파이. 빈 교실 기록에 없던 이름만 알리며, 이름과 설정에 따라 알리지 않는 경우가 있습니다. |
 | 조건부 탐지 | 무선 이어폰, 스마트워치, 스마트 안경, 블루투스를 켠 휴대폰. 연결된 뒤 알림 신호를 멈추는 제품은 연결 전에만 보입니다. |
-| 탐지 불가 | 블루투스·와이파이를 끄고 LTE·5G만 쓰는 기기, 선으로 연결하거나 저장만 하는 카메라, 목걸이형·귓속 수신기, 구형(클래식) 블루투스만 쓰는 기기, 교실 밖의 기기 |
+| 탐지 불가 | 블루투스·와이파이를 끄고 LTE·5G만 쓰는 기기, 선으로 연결하거나 저장만 하는 카메라, 목걸이형·귓속 수신기, 검색에 응답하지 않고 BLE 알림도 내지 않는 Bluetooth 기기, 교실 밖의 기기 |
 
 위 목록은 전부가 아닙니다. 다음 사항도 함께 알아 두어야 합니다.
 
@@ -119,7 +123,7 @@
 
 ## 저장하는 데이터
 
-- 마지막 빈 교실 기록 하나를 앱 전용 저장소에 JSON으로 저장합니다. 측정 시각, 잡힌 전파의 주소·이름·수신 세기·회사 코드가 들어갑니다.
+- 마지막 빈 교실 기록 하나를 앱 전용 저장소에 JSON으로 저장합니다. 측정 시각, 잡힌 전파의 주소·이름·수신 세기·회사 코드와 추가 탐색의 기준 개수·출처 및 주소별 기준 묶음 연결 정보가 들어갑니다.
 - 주변 기기의 이름에는 개인 이름이 들어 있을 수 있습니다(예: "○○의 AirPods"). 이 기록은 기기 백업 대상에서 제외하며 앱 밖으로 내보내는 기능이 없습니다.
 - 앱을 지우면 함께 지워집니다.
 
@@ -178,7 +182,7 @@ APK는 `app/build/outputs/apk/debug/app-debug.apk`에 생깁니다. 구조와 �
 
 KoriyoSCAN is an Android app for exam proctors. It records the Wi-Fi access points and Bluetooth Low Energy advertisements present in an empty room, then flags signals that were not in that record once the exam is under way, and helps walk toward one by signal strength.
 
-It cannot detect every device. It only sees Wi-Fi access points and BLE advertisements, so it misses devices that use cellular data only, wired or record-only cameras, Bluetooth Classic devices, and anything that stops advertising once connected. It does not block signals and does not decide whether anyone cheated. Field accuracy has not been measured.
+The development build also runs Bluetooth general discovery followed by Wi-Fi Direct peer discovery every two minutes, with separate baseline comparison and explicit stale/partial results. Bluetooth discovery can include BLE results and only finds discoverable peers. Wi-Fi Direct exposes a system-reported peer list without RSSI or packet reception times, not all Wi-Fi clients. Neither path pairs or connects. It cannot detect every device and misses cellular-only devices, wired or record-only cameras, and devices that neither advertise nor respond to discovery. It does not block signals and does not decide whether anyone cheated. Field accuracy has not been measured.
 
 Records stay on the phone; the app declares no internet permission. The UI and the rest of this document are in Korean. Licensed under Apache-2.0; see [NOTICE](NOTICE) for the icon and bundled registry data.
 

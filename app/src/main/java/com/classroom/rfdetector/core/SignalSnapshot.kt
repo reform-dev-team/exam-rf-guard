@@ -17,7 +17,14 @@ data class SignalSnapshot(
     val capturedAtMs: Long,
     val simulation: Boolean,
     val signals: List<SnapshotSignal>,
+    val discoveryBaselines: Map<ScanSource, Map<String, Int>> = emptyMap(),
+    val discoveryBaselineAddresses: Map<ScanSource, Map<String, String>> = emptyMap(),
 ) {
+    /** Older nonempty periodic baselines have counts but cannot link later name changes safely. */
+    fun discoveryBaseline(source: ScanSource): Map<String, Int>? = discoveryBaselines[source]?.takeIf {
+        it.isEmpty() || !discoveryBaselineAddresses[source].isNullOrEmpty()
+    }
+
     companion object {
         fun capture(area: String, capturedAtMs: Long, simulation: Boolean, devices: List<TrackedDevice>): SignalSnapshot {
             val signals = devices.map { device ->
