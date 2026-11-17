@@ -148,7 +148,8 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                             Text("측정하는 동안 잡힌 전파는 모두 원래 있던 것으로 기록됩니다. 감독관 본인의 시계와 이어폰은 지금 켜 두면 함께 기록되어 나중에 알리지 않습니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
                         }
                     }
-                    item { OutlinedButton(onClick = { vm.stopScan() }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = RoundedCornerShape(16.dp)) { Text("초기화") } }
+                    // 누르면 모은 전파가 저장되지 않고 사라지므로, 뒤로 가기와 같이 먼저 묻는다.
+                    item { OutlinedButton(onClick = { confirmStop = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = RoundedCornerShape(16.dp)) { Text("초기화") } }
                 }
                 GuardPhase.WATCH, GuardPhase.ENDED -> {
                     val watching = phase == GuardPhase.WATCH
