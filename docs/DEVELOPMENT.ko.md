@@ -24,6 +24,8 @@ sdk.dir=C:/Android/Sdk
 | 테스트 보고서 | `app/build/reports/tests/testDebugUnitTest/index.html` |
 | Lint 보고서 | `app/build/reports/lint-results-debug.html` |
 
+디버그 빌드는 준비 화면에서 비행기 모드 단계를 건너뜁니다. 비행기 모드를 켜면 무선 ADB가 끊기기 때문입니다. 측정 화면에는 "비행기 모드가 꺼져 있습니다" 경고가 그대로 뜨며, 디버그 빌드는 실제 시험 감독에 쓰면 안 됩니다. 배포판은 비행기 모드를 켜야 측정을 시작할 수 있습니다.
+
 직접 빌드한 APK는 배포판과 서명이 달라 배포판 위에 덮어 깔리지 않습니다. 정식 서명 빌드는 [RELEASE.ko.md](RELEASE.ko.md)를 참고하세요.
 
 ## 구성

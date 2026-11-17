@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.classroom.rfdetector.AppViewModel
+import com.classroom.rfdetector.BuildConfig
 import com.classroom.rfdetector.RadioProblem
 import com.classroom.rfdetector.core.*
 import java.text.SimpleDateFormat
@@ -76,10 +77,11 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
     // 빈 교실 기록은 2분 이상, 와이파이 탐색이 두 번 끝난 뒤에 저장한다. 와이파이를 못 쓰는 경우 3분 뒤에는 막지 않는다.
     val collected = simulation || elapsed >= COLLECT_SECONDS + 60 || (elapsed >= COLLECT_SECONDS && vm.wifi.completedScans >= 2)
     // 권한, 비행기 모드, 와이파이·블루투스·위치가 모두 갖춰져야 측정과 감시를 시작할 수 있다.
+    // 디버그 빌드는 무선 ADB가 끊기지 않게 비행기 모드 단계만 건너뛴다. 측정 화면의 경고는 그대로 뜬다.
     val missing = if (simulation) emptyList() else listOfNotNull(
         SetupStep.PERMISSIONS.takeIf { permissionMissing },
         SetupStep.SILENCE.takeIf { silenceMissing },
-        SetupStep.AIRPLANE.takeIf { airplaneOff },
+        SetupStep.AIRPLANE.takeIf { airplaneOff && !BuildConfig.DEBUG },
         SetupStep.WIFI.takeIf { RadioProblem.WIFI_OFF in problems },
         SetupStep.BLUETOOTH.takeIf { RadioProblem.BLUETOOTH_OFF in problems },
         SetupStep.LOCATION.takeIf { RadioProblem.LOCATION_OFF in problems },
