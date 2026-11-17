@@ -29,6 +29,14 @@ fun advertisedName(address: String, name: String): String? {
 }
 
 val TrackedDevice.groupKey: String get() = signalGroupKey(source, key, displayName, manufacturerIds, hints)
+
+/**
+ * "확인함"으로 목록에서 뺄 때 쓰는 키. 보통은 묶음 키지만, 이름 숨김 와이파이는 서로 다른 기기가 한 묶음에 모이므로
+ * 주소마다 따로 뺀다. 묶음째 빼면 숨김 와이파이 하나를 확인한 뒤 새로 켜진 다른 숨김 핫스팟까지 알리지 않게 된다.
+ */
+val TrackedDevice.acknowledgeKey: String get() = groupKey.let { group ->
+    if (group == HIDDEN_WIFI_KEY) "$HIDDEN_WIFI_KEY:${key.uppercase(Locale.ROOT)}" else group
+}
 val SnapshotSignal.groupKey: String get() = signalGroupKey(source, address, name, manufacturerIds, hints)
 
 /** 빈 교실 기록에서 묶음마다 동시에 몇 개였는지. 저장 순간 잡히지 않던 묶음은 1개로 친다. */
@@ -85,6 +93,8 @@ fun watchView(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowle
     val (findMy, others) = live.partition { it.source == ScanSource.BLE && it.hints.primary == SignalHint.APPLE_FIND_MY }
     // 이름을 숨긴 것까지 포함해, 빈 교실에 있던 공유기가 뒤늦게 내보인 다른 주소는 원래 있던 것이다.
     val rest = others.filterNot { it.source == ScanSource.WIFI && isSameAccessPoint(it.key, baselineWifi) }
+        // 확인함으로 뺀 이름 숨김 와이파이는 그 주소만 뺀다.
+        .filterNot { it.groupKey == HIDDEN_WIFI_KEY && it.acknowledgeKey in acknowledged }
     val flagged = mutableListOf<SignalGroup>()
     rest.groupBy { it.groupKey }.forEach { (key, members) ->
         val sorted = members.sortedByDescending { it.rssiEma ?: Double.NEGATIVE_INFINITY }
@@ -130,7 +140,7 @@ private fun knownGroups(devices: List<TrackedDevice>, baseline: Map<String, Int>
     }
     val fromEmptyRoom = samples.map { row(it.groupKey, it) }
     val recorded = samples.map { it.groupKey }.toSet()
-    val later = members.filter { (key, all) -> key !in recorded && (key in acknowledged || all.any { it.source == ScanSource.WIFI && isSameAccessPoint(it.key, baselineWifi) }) }
+    val later = members.filter { (key, all) -> key !in recorded && (key in acknowledged || all.any { it.acknowledgeKey in acknowledged } || all.any { it.source == ScanSource.WIFI && isSameAccessPoint(it.key, baselineWifi) }) }
         .entries.sortedWith(compareBy({ entry -> entry.value.minOf { it.firstSeenMs } }, { it.key })).map { row(it.key, null) }
     return fromEmptyRoom + later
 }

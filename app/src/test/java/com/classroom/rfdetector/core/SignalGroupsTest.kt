@@ -97,6 +97,25 @@ class SignalGroupsTest {
         assertEquals("da:a1:19:3b:7c:01", flagged.strongest.key)
     }
 
+    @Test fun confirmingOneHiddenNetworkDoesNotHideTheNextOne() {
+        wifi("10:00:00:00:00:01", 0, "SCHOOL")
+        val snapshot = SignalSnapshot.capture("A", 1_000, false, tracker.snapshot(1_000, includeInactive = true))
+        val baseline = baselineGroupCounts(snapshot)
+        val routers = baselineWifiAddresses(snapshot)
+        fun now(nowMs: Long, acknowledged: Set<String>) =
+            watchView(tracker.snapshot(nowMs, includeInactive = true), baseline, acknowledged, nowMs, routers)
+
+        wifi("da:a1:19:3b:7c:01", 100_000, null, rssi = -50)
+        val first = now(101_000, emptySet()).wifi.single().strongest
+        // 감독관이 첫 번째 숨김 와이파이를 확인하고 목록에서 뺀다.
+        val acknowledged = setOf(first.acknowledgeKey)
+        assertEquals(0, now(101_000, acknowledged).count)
+
+        // 나중에 다른 숨김 핫스팟이 켜지면 그것은 알린다.
+        wifi("3e:55:01:9a:20:7f", 150_000, null, rssi = -52)
+        assertEquals("3e:55:01:9a:20:7f", now(151_000, acknowledged).wifi.single().devices.single().key)
+    }
+
     @Test fun hiddenNetworkFromARouterAlreadyInTheEmptyRoomIsNotNew() {
         wifi("b4:a9:4f:c7:31:a2", 0, "KT_GiGA_5G_319F", rssi = -41)
         val snapshot = SignalSnapshot.capture("A", 1_000, false, tracker.snapshot(1_000, includeInactive = true))

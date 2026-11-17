@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.classroom.rfdetector.AppViewModel
 import com.classroom.rfdetector.BuildConfig
 import com.classroom.rfdetector.RadioProblem
+import com.classroom.rfdetector.core.acknowledgeKey
 import com.classroom.rfdetector.core.*
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -291,7 +292,7 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
         }
         Surface(color = RfColors.surface) {
             Row(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (flagged) OutlinedButton(onClick = { vm.acknowledge(device.groupKey); close() }, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = RoundedCornerShape(16.dp)) { Text("확인함\n목록에서 빼기") }
+                if (flagged) OutlinedButton(onClick = { vm.acknowledge(device.acknowledgeKey); close() }, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = RoundedCornerShape(16.dp)) { Text("확인함\n목록에서 빼기") }
                 Button(onClick = close, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = RfColors.surfaceAlt, contentColor = RfColors.textPrimary)) { Text("목록으로", fontWeight = FontWeight.Bold) }
             }
