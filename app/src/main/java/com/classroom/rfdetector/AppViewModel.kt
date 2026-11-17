@@ -260,11 +260,29 @@ class AppViewModel(private val app: Context) : ViewModel() {
         applyBaseline()
     }
 
-    /** 빈 교실 기록을 비운다. 다음 시작은 1단계 측정부터다. */
-    fun resetBaseline() {
+    private fun clearBaselineInMemory() {
         baselineSnapshot.value = null
         watch.value = WatchView()
         applyBaseline()
+    }
+
+    /** 빈 교실 기록을 비운다. 다음 시작은 1단계 측정부터다. */
+    fun resetBaseline() {
+        clearBaselineInMemory()
+        // 저장해 둔 기록도 버린다. 남겨 두면 처음 화면과 앱 재시작 뒤에 지운 기록이 다시 나온다.
+        savedBaseline.value = null
+        snapshotBusy.value = true
+        storageScope.launch {
+            try {
+                snapshotStore.save(emptyList())
+                // 이미 진행 중이던 저장이 뒤늦게 기록을 되살렸다면 다시 비운다.
+                withContext(Dispatchers.Main.immediate) { savedBaseline.value = null }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                snapshotError.value = "저장된 빈 교실 기록을 지우지 못했습니다."
+            } finally { snapshotBusy.value = false }
+        }
     }
 
     /** 빈 교실 기록과 목록을 비우고 새 측정을 바로 시작한다. */
@@ -293,7 +311,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
         tracker.clear()
         _devices.value = emptyList()
         scanSession.value = null
-        resetBaseline()
+        clearBaselineInMemory()
     }
 
     fun simAddDevice() {

@@ -2,6 +2,8 @@ package com.classroom.rfdetector
 
 import android.content.ContextWrapper
 import android.os.Looper
+import com.classroom.rfdetector.core.SignalSnapshot
+import com.classroom.rfdetector.core.SnapshotStore
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -104,6 +106,19 @@ class ScanSessionTest {
         saveEmptyRoom()
         vm.shutdown()
         // 가상 전파로 저장한 기록은 실제 감시에 이어 쓰지 않는다.
+        assertNull(newViewModel().savedBaseline.value)
+    }
+
+    @Test fun resettingTheEmptyRoomAlsoDiscardsTheSavedRecord() {
+        val real = SignalSnapshot.capture("교실", 1_000L, false, vm.devices.value)
+        vm.shutdown()
+        SnapshotStore(directory.root).save(listOf(real))
+        newViewModel()
+        assertNotNull(vm.savedBaseline.value)
+        vm.resetBaseline()
+        awaitStorage()
+        assertNull(vm.savedBaseline.value)
+        vm.shutdown()
         assertNull(newViewModel().savedBaseline.value)
     }
 }
