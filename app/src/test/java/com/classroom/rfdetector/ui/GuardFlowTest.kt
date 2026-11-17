@@ -59,7 +59,10 @@ class GuardFlowTest {
             saveScreen("guard-3-clear")
             addEarbuds(vm)
             saveScreen("guard-4-found")
-            compose.onNodeWithText("무선 이어폰").performClick()
+            // 종류를 판단하지 않는다: 기기가 알린 이름이나 종류 추정이 카드 제목에 나오지 않는다.
+            compose.onNodeWithText("무선 이어폰").assertDoesNotExist()
+            compose.onNodeWithText("AirPods", substring = true).assertDoesNotExist()
+            compose.onNodeWithText("블루투스 기기").performClick()
             compose.onNodeWithText("가까울수록 빠른 진동").assertExists()
             compose.onNodeWithText("기기 정보").assertExists()
             compose.onNodeWithText("주소").assertExists()
@@ -108,7 +111,7 @@ class GuardFlowTest {
             compose.onNodeWithText("새 전파 1개 발견").assertExists()
             compose.onNodeWithText("앱을 벗어나 있던 시간이 있습니다").assertExists()
 
-            compose.onNodeWithText("무선 이어폰").performClick()
+            compose.onNodeWithText("블루투스 기기").performClick()
             compose.onNodeWithText("확인함\n목록에서 빼기").performClick()
             waitForText("새 전파 없음")
             assertEquals(1, vm.acknowledged.value.size)
@@ -126,8 +129,8 @@ class GuardFlowTest {
         try {
             recordEmptyRoom(vm)
             compose.onNodeWithText("원래 있던 전파 5종").performClick()
-            compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("스마트워치 (가상)", substring = true))
-            compose.onNodeWithText("스마트워치 (가상)", substring = true).performClick()
+            compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("주소 끝 WATCH"))
+            compose.onNodeWithText("주소 끝 WATCH").performClick()
             compose.onNodeWithText("빈 교실 기록에 있던 전파").assertExists()
             compose.onNodeWithText("기기 정보").assertExists()
             compose.onNodeWithText("확인함\n목록에서 빼기").assertDoesNotExist()

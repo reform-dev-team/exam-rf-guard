@@ -253,7 +253,7 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
     val device = devices.firstOrNull { it.trackingKey == trackingKey }
     val close = { vm.findTarget.value = null; vm.setGeiger(false); onBack() }
     if (device == null) { LaunchedEffect(Unit) { close() }; return }
-    val (kind, symbol) = plainKind(device)
+    val symbol = radioSymbol(device.source)
     val live = device.presence != SignalPresence.HISTORY
     val accent = if (live) classAccent(device.distanceClass) else RfColors.textDim
     // 새 전파로 올라온 것만 "확인함"으로 뺄 수 있다. 원래 있던 전파는 뺄 목록이 없다.
@@ -265,8 +265,7 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
                 Column {
                     Text(cardLabels(device).first, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     if (!flagged) Text("빈 교실 기록에 있던 전파", color = RfColors.primary, style = MaterialTheme.typography.labelMedium)
-                    Text(if (kind in unknownKinds) cardLabels(device).second else advertisedName(device.key, device.displayName)?.let { "기기가 알린 이름: $it" } ?: "이름을 알리지 않는 기기",
-                        color = RfColors.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(cardLabels(device).second, color = RfColors.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             kindNote(device)?.let { Text(it) }
@@ -295,7 +294,7 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
                 Text("모두 기기가 스스로 알린 값이라 바꾸거나 흉내 낼 수 있습니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
             }
             Text("${presenceText(device)} · 처음 잡힌 시각 ${clock(device.firstSeenMs)}" + if (device.periods.size > 1) " · 사라졌다 다시 나타남 ${device.periods.size - 1}회" else "", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
-            Text("거리는 전파 세기로 어림한 값이라 벽과 사람에 따라 달라집니다. 종류는 기기가 스스로 알린 정보로 추정한 것이며, 이 표시만으로 부정행위라고 판단하지 마세요.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
+            Text("거리는 전파 세기로 어림한 값이라 벽과 사람에 따라 달라집니다. 이 앱은 기기의 종류를 판단하지 않습니다. 근처에 무선 기기가 있다는 표시일 뿐이며, 이 표시만으로 부정행위라고 판단하지 마세요.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
         }
         Surface(color = RfColors.surface) {
             Row(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -372,55 +371,34 @@ private fun GuideList(vararg items: String, numbered: Boolean = false) {
     }
 }
 
-private fun plainKind(device: TrackedDevice) = plainKind(device.source, device.key, device.displayName, device.hints)
+/**
+ * 카드에는 전파 방식만 쓰고 기기의 종류(이어폰, 안경 등)는 쓰지 않는다. 종류는 기기가 스스로 알린 이름과
+ * 광고 데이터에서 읽은 추정이라 바꾸거나 흉내 낼 수 있는데, 화면 제목에 뜨면 판정처럼 읽히기 때문이다.
+ * 기기가 알린 값은 위치 찾기 화면의 "기기 정보"에 그대로 보여 준다.
+ */
+private fun radioSymbol(source: ScanSource): RfSymbol = if (source == ScanSource.WIFI) RfSymbol.WIFI else RfSymbol.BLUETOOTH
 
-/** 종류는 기기가 스스로 알린 이름과 광고 데이터에서 읽은 추정이다. */
-private fun plainKind(source: ScanSource, address: String, name: String, hints: Set<SignalHint>): Pair<String, RfSymbol> {
-    val advertised = advertisedName(address, name)
-    val audio = if (source == ScanSource.BLE) AudioNameCatalog.match(advertised) else null
-    val wearable = if (source == ScanSource.BLE) WearableNameCatalog.match(advertised) else null
-    val hint = hints.primary
-    return when {
-        source == ScanSource.WIFI -> (hint?.label ?: if (advertised == null) "이름을 숨긴 와이파이" else "와이파이 · 공유기나 휴대폰 핫스팟") to RfSymbol.WIFI
-        audio?.kind == AudioKind.EARPHONES -> "무선 이어폰" to RfSymbol.EARPHONES
-        audio?.kind == AudioKind.HEADPHONES -> "헤드폰" to RfSymbol.HEADPHONES
-        audio != null -> "오디오 기기" to RfSymbol.HEADPHONES
-        wearable?.kind == WearableKind.SMART_GLASSES -> "스마트 안경" to RfSymbol.GLASSES
-        wearable?.kind == WearableKind.SMARTWATCH -> "스마트워치" to RfSymbol.WATCH
-        wearable?.kind == WearableKind.CAMERA -> "카메라" to RfSymbol.CAMERA
-        hint == null -> "블루투스 기기 · 종류 모름" to RfSymbol.BLUETOOTH
-        hint == SignalHint.GLASSES -> hint.label to RfSymbol.GLASSES
-        hint == SignalHint.WATCH -> hint.label to RfSymbol.WATCH
-        hint in setOf(SignalHint.EARPHONES, SignalHint.APPLE_AUDIO, SignalHint.HEARING_AID, SignalHint.FAST_PAIR) -> hint.label to RfSymbol.EARPHONES
-        else -> hint.label to RfSymbol.BLUETOOTH
-    }
-}
+private fun radioTitle(source: ScanSource): String = if (source == ScanSource.WIFI) "와이파이 기기" else "블루투스 기기"
 
-private val unknownKinds = setOf("블루투스 기기 · 종류 모름", "와이파이 · 공유기나 휴대폰 핫스팟")
-
-/** 카드의 제목과 둘째 줄. 종류를 알면 종류가 제목이고, 모르면 기기가 알린 이름(없으면 제조사)이 제목이다. */
-private fun cardLabels(kind: String, advertised: String?, maker: String?, wifi: Boolean): Pair<String, String> = when {
-    kind !in unknownKinds -> kind to (advertised ?: maker ?: "이름 없음")
-    advertised != null -> advertised to if (wifi) "와이파이" else "블루투스 · 종류 모름"
-    maker != null -> maker to "이름 없음 · 제조사만 확인됨"
-    else -> kind to "이름 없음"
-}
-
-private fun cardLabels(device: TrackedDevice) = cardLabels(plainKind(device).first, advertisedName(device.key, device.displayName), maker(device), device.source == ScanSource.WIFI)
+/** 카드의 제목과 둘째 줄. 같은 화면의 카드끼리 구별하도록 주소 끝자리를 붙인다. */
+private fun cardLabels(device: TrackedDevice): Pair<String, String> =
+    radioTitle(device.source) to "주소 끝 ${device.key.takeLast(5).uppercase(Locale.ROOT)}"
 
 private fun maker(device: TrackedDevice): String? = device.identity.advertisedCompanies.firstOrNull() ?: device.identity.macOrganization
 
 /** 받을 수 있었던 정보 전부. 이름이 없는 전파도 이것으로 판단한다. */
 private fun infoRows(device: TrackedDevice): List<Pair<String, String>> = buildList {
     val wifi = device.source == ScanSource.WIFI
-    if (device.hints.isNotEmpty()) add("종류 단서" to device.hints.sortedBy { it.ordinal }.joinToString(" / ") { it.label })
+    add((if (wifi) "와이파이 이름" else "기기가 알린 이름") to when {
+        wifi && device.hidden -> "숨김"
+        else -> advertisedName(device.key, device.displayName) ?: "알리지 않음"
+    })
     if (device.identity.advertisedCompanies.isNotEmpty()) add("제조사 · 블루투스 회사 코드" to device.identity.advertisedCompanies.joinToString(", "))
     add("제조사 · 주소 앞자리" to when {
         isLocallyAdministered(device.key) == true && wifi -> "임의 주소라 조회할 수 없음. 휴대폰 핫스팟이 주로 이런 주소를 씁니다."
         isLocallyAdministered(device.key) == true -> "임의 주소라 조회할 수 없음. 휴대폰과 이어폰은 주소를 주기적으로 바꿉니다."
         else -> device.identity.macOrganization ?: "등록부에 없음"
     })
-    if (wifi && device.hidden) add("와이파이 이름" to "숨김")
     device.details.forEach { (label, value) -> add(label to value) }
     add("세기" to "지금 ${device.rssiEma?.let { "%.0f dBm".format(it) } ?: "모름"} · 가장 셀 때 ${device.peakRssi?.let { "$it dBm" } ?: "모름"}")
     add("받은 횟수" to "${device.observationCount}회 · 처음 ${clock(device.firstSeenMs)} · 마지막 ${device.lastSeenAgeSeconds}초 전")
@@ -464,7 +442,7 @@ private fun LazyListScope.groupRows(group: SignalGroup, open: Boolean, onToggle:
         }) { if (single) onFind(group.strongest.trackingKey) else onToggle() }
     }
     if (open && !single) {
-        item(key = "note-${group.key}") { Text("같은 종류라 어느 것이 새로 온 것인지는 구분할 수 없습니다. 가까이 잡히는 것부터 확인하세요.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall) }
+        item(key = "note-${group.key}") { Text("같은 묶음으로 잡혀 어느 것이 새로 온 것인지는 구분할 수 없습니다. 가까이 잡히는 것부터 확인하세요.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall) }
         items(group.devices, key = { "member-${it.trackingKey}" }) { device ->
             Box(Modifier.padding(start = 18.dp)) { SignalCard(device) { onFind(device.trackingKey) } }
         }
@@ -485,9 +463,9 @@ private fun LazyListScope.knownRows(group: KnownGroup, open: Boolean, onToggle: 
 private fun KnownCard(group: KnownGroup, open: Boolean, onClick: () -> Unit) {
     val shown = group.live.firstOrNull() ?: group.last
     val sample = group.sample
-    val (kind, symbol) = if (shown != null) plainKind(shown) else plainKind(sample!!.source, sample.address, sample.name, sample.hints)
-    val (title, subtitle) = if (shown != null) cardLabels(shown)
-        else cardLabels(kind, advertisedName(sample!!.address, sample.name), sample.manufacturer.takeUnless { it == "제조사 미확인" }, sample.source == ScanSource.WIFI)
+    val symbol = radioSymbol(shown?.source ?: sample!!.source)
+    // 지금도 이전에도 잡히지 않은 묶음은 빈 교실 기록만 있다. 기록의 주소는 구별용으로 보여 주지 않는다.
+    val (title, subtitle) = if (shown != null) cardLabels(shown) else radioTitle(sample!!.source) to "빈 교실 기록에만 있음"
     val live = group.live.isNotEmpty()
     val strongest = group.live.firstOrNull()
     Surface(onClick = onClick, enabled = live, color = RfColors.surface, shape = RoundedCornerShape(16.dp)) {
@@ -682,7 +660,7 @@ private fun ProximityBars(device: TrackedDevice, barWidth: Dp = 7.dp, maxHeight:
 
 @Composable
 private fun SignalCard(device: TrackedDevice, groupNote: String? = null, calm: Boolean = false, onClick: () -> Unit) {
-    val symbol = plainKind(device).second
+    val symbol = radioSymbol(device.source)
     val (title, subtitle) = cardLabels(device)
     val live = device.presence != SignalPresence.HISTORY
     Surface(onClick = onClick, color = RfColors.surface, shape = RoundedCornerShape(16.dp)) {
