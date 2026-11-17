@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -17,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -141,7 +143,7 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                     item {
                         GuardPanel {
                             Text("지금 수험생이 있으면 안 됩니다", fontWeight = FontWeight.SemiBold)
-                            Text("측정하는 동안 잡힌 전파는 모두 원래 있던 것으로 기록됩니다. 감독관 본인의 시계와 이어폰은 지금 켜 두면 함께 기록되어 나중에 알리지 않습니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
+                            Text("측정하는 동안 잡힌 전파는 모두 원래 있던 것으로 기록됩니다. 감독관 본인의 시계와 이어폰은 지금 켜 두면 함께 기록되어 나중에 알리지 않습니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                     item { OutlinedButton(onClick = { vm.stopScan() }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = RoundedCornerShape(16.dp)) { Text("초기화") } }
@@ -172,13 +174,13 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                                     found -> "빈 교실에 없던 전파가 지금 잡히고 있습니다. 줄을 눌러 다가가며 세기를 확인하세요. 사라지면 목록에서 빠집니다."
                                     incomplete -> "아래 문제를 해결하기 전까지는 전파가 있어도 표시되지 않을 수 있습니다."
                                     else -> "지금 잡히는 전파는 모두 빈 교실 기록에 있던 것입니다."
-                                }, color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
+                                }, color = RfColors.textDim, style = MaterialTheme.typography.bodyMedium)
                             }
                         }
                     }
                     examModeItems(airplaneOff && !simulation, silenceMissing && !simulation)
                     if (watching) {
-                        item { Text("이 화면이 켜져 있는 동안에만 감시합니다. 화면은 자동으로 꺼지지 않으니 전원 버튼을 누르거나 다른 앱으로 가지 마세요. 충전기를 꽂아 두면 좋습니다.${if (silenceMissing || simulation) "" else " 감시 중에는 전화·알림·알람이 울리지 않게 휴대폰을 무음으로 바꿔 둡니다."}", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall) }
+                        item { Text("이 화면이 켜져 있는 동안에만 감시합니다. 화면은 자동으로 꺼지지 않으니 전원 버튼을 누르거나 다른 앱으로 가지 마세요. 충전기를 꽂아 두면 좋습니다.${if (silenceMissing || simulation) "" else " 감시 중에는 전화·알림·알람이 울리지 않게 휴대폰을 무음으로 바꿔 둡니다."}", color = RfColors.textDim, style = MaterialTheme.typography.bodyMedium) }
                         problemItems(problems)
                         session?.takeIf { it.pauses > 0 }?.let {
                             item { GuardNotice("앱을 벗어나 있던 시간이 있습니다", "${it.pauses}회, 총 ${minSec((it.pausedMs / 1000).toInt())} 동안은 전파를 받지 못했습니다. 화면을 끄거나 다른 앱을 쓰는 동안에는 감시가 멈추고, 돌아오면 자동으로 이어집니다.") }
@@ -191,22 +193,22 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                         if (farOpen) watch.far.forEach { group -> groupRows(group, openGroup == group.key, { toggle(group.key) }, onFind) }
                         if (watch.findMy.isNotEmpty()) item { FoldRow("꺼 둔 아이폰·에어태그 신호 ${watch.findMy.size}개", findMyOpen) { findMyOpen = !findMyOpen } }
                         if (findMyOpen) {
-                            item { Text("전원을 끈 아이폰과 에어태그는 ‘나의 찾기’ 신호를 계속 냅니다. 꺼서 제출한 휴대폰도 여기에 잡히므로 알리지 않고 개수만 보여 줍니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall) }
+                            item { Text("전원을 끈 아이폰과 에어태그는 ‘나의 찾기’ 신호를 계속 냅니다. 꺼서 제출한 휴대폰도 여기에 잡히므로 알리지 않고 개수만 보여 줍니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodyMedium) }
                             items(watch.findMy, key = { "findmy-${it.trackingKey}" }) { device -> SignalCard(device) { onFind(device.trackingKey) } }
                         }
                         item { FoldRow("원래 있던 전파 ${watch.knownGroups.size}종", knownOpen) { knownOpen = !knownOpen } }
                         if (knownOpen) {
-                            item { Text("빈 교실 기록 순서대로 고정해 둔 목록입니다. 순서는 바뀌지 않고, 지금 잡히는지만 표시가 바뀝니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall) }
+                            item { Text("빈 교실 기록 순서대로 고정해 둔 목록입니다. 순서는 바뀌지 않고, 지금 잡히는지만 표시가 바뀝니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodyMedium) }
                             watch.knownGroups.forEach { group -> knownRows(group, openGroup == "known-${group.key}", { toggle("known-${group.key}") }, onFind) }
                         }
                     }
                 }
             }
-            error?.let { message -> item { Text(message, color = RfColors.warning, style = MaterialTheme.typography.bodySmall) } }
+            error?.let { message -> item { Text(message, color = RfColors.warning, style = MaterialTheme.typography.bodyMedium) } }
         }
         Surface(color = RfColors.surface) {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (phase == GuardPhase.WATCH || phase == GuardPhase.ENDED) Text("이 앱은 와이파이와 저전력 블루투스(BLE) 신호만 봅니다. 아무것도 잡히지 않아도 부정행위가 없다는 뜻은 아닙니다. LTE만 쓰는 기기는 보이지 않습니다.", color = RfColors.textDim, style = MaterialTheme.typography.labelSmall)
+                if (phase == GuardPhase.WATCH || phase == GuardPhase.ENDED) Text("이 앱은 와이파이와 저전력 블루투스(BLE) 신호만 봅니다. 아무것도 잡히지 않아도 부정행위가 없다는 뜻은 아닙니다. LTE만 쓰는 기기는 보이지 않습니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodyMedium)
                 when (phase) {
                     GuardPhase.READY -> MainButton("빈 교실 측정 시작", onClick = onStart)
                     GuardPhase.COLLECT -> MainButton(if (collected || elapsed >= COLLECT_SECONDS) "빈 교실 기록 저장" else "빈 교실 기록 저장 · ${minSec(COLLECT_SECONDS - elapsed)} 뒤",
@@ -254,11 +256,14 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(Modifier.size(46.dp).background(if (flagged) warnDim else RfColors.surfaceAlt, CircleShape), contentAlignment = Alignment.Center) { RfGlyph(symbol, size = 26.dp, color = if (flagged) RfColors.warning else RfColors.primary) }
-                Column {
-                    Text(cardLabels(device).first, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    if (!flagged) Text("빈 교실 기록에 있던 전파", color = RfColors.primary, style = MaterialTheme.typography.labelMedium)
-                    Text(if (kind in unknownKinds) cardLabels(device).second else advertisedName(device.key, device.displayName)?.let { "기기가 알린 이름: $it" } ?: "이름을 알리지 않는 기기",
-                        color = RfColors.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Column(Modifier.weight(1f)) {
+                    Text(cardLabels(device).first, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    if (!flagged) Text("빈 교실 기록에 있던 전파", color = RfColors.primary, style = MaterialTheme.typography.bodyMedium)
+                    if (kind in unknownKinds) Text(cardLabels(device).second, color = RfColors.textDim, style = MaterialTheme.typography.bodyMedium)
+                    else {
+                        Text("기기가 알린 이름", color = RfColors.textDim, style = MaterialTheme.typography.bodyMedium)
+                        Text(advertisedName(device.key, device.displayName) ?: "이름을 알리지 않는 기기", style = MaterialTheme.typography.bodyLarge)
+                    }
                 }
             }
             kindNote(device)?.let { Text(it) }
@@ -271,23 +276,27 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
             }
             Text(if (live) "휴대폰을 들고 천천히 걸어 보세요. 막대가 늘어나는 쪽에 기기가 있습니다." else "지금은 잡히지 않습니다. 다시 나타나면 막대가 올라갑니다.")
             Surface(color = RfColors.surface, shape = RoundedCornerShape(18.dp)) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().toggleable(value = geigerOn, enabled = scanning, role = Role.Switch,
+                    onValueChange = { on -> vm.findTarget.value = if (on) device.trackingKey else null; vm.setGeiger(on) })
+                    .heightIn(min = 48.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("가까울수록 빠른 진동", Modifier.weight(1f))
-                    Switch(checked = geigerOn, enabled = scanning, onCheckedChange = { on -> vm.findTarget.value = if (on) device.trackingKey else null; vm.setGeiger(on) })
+                    Switch(checked = geigerOn, enabled = scanning, onCheckedChange = null,
+                        colors = SwitchDefaults.colors(uncheckedThumbColor = RfColors.textDim,
+                            uncheckedTrackColor = RfColors.surfaceAlt, uncheckedBorderColor = RfColors.textDim))
                 }
             }
             GuardPanel {
                 Text("기기 정보", fontWeight = FontWeight.Bold)
                 infoRows(device).forEach { (label, value) ->
                     Column {
-                        Text(label, color = RfColors.textDim, style = MaterialTheme.typography.labelSmall)
+                        Text(label, color = RfColors.textDim, style = MaterialTheme.typography.bodyMedium)
                         Text(value, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
-                Text("모두 기기가 스스로 알린 값이라 바꾸거나 흉내 낼 수 있습니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
+                Text("모두 기기가 스스로 알린 값이라 바꾸거나 흉내 낼 수 있습니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodyMedium)
             }
-            Text("${presenceText(device)} · 처음 잡힌 시각 ${clock(device.firstSeenMs)}" + if (device.periods.size > 1) " · 사라졌다 다시 나타남 ${device.periods.size - 1}회" else "", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
-            Text("거리는 전파 세기로 어림한 값이라 벽과 사람에 따라 달라집니다. 종류는 기기가 스스로 알린 정보로 추정한 것이며, 이 표시만으로 부정행위라고 판단하지 마세요.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
+            Text("${presenceText(device)} · 처음 잡힌 시각 ${clock(device.firstSeenMs)}" + if (device.periods.size > 1) " · 사라졌다 다시 나타남 ${device.periods.size - 1}회" else "", color = RfColors.textDim, style = MaterialTheme.typography.bodyMedium)
+            Text("거리는 전파 세기로 어림한 값이라 벽과 사람에 따라 달라집니다. 종류는 기기가 스스로 알린 정보로 추정한 것이며, 이 표시만으로 부정행위라고 판단하지 마세요.", color = RfColors.textDim, style = MaterialTheme.typography.bodyMedium)
         }
         Surface(color = RfColors.surface) {
             Row(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -314,13 +323,13 @@ fun GuideScreen() {
             Text("이 앱은 화면에 떠 있는 동안에만 전파를 받습니다. 측정과 감시 중에는 화면이 자동으로 꺼지지 않습니다.", style = MaterialTheme.typography.bodyMedium)
             GuideList("전원 버튼을 누르지 않습니다.", "다른 앱으로 가거나 홈 화면으로 나가지 않습니다.", "전화가 와서 화면이 바뀌지 않게 비행기 모드를 켜고, 블루투스와 와이파이만 다시 켭니다.", "화면을 계속 켜 두면 배터리가 빨리 닳으니 충전기를 연결하고 밝기를 낮춥니다.")
             Text("측정과 감시 중에는 전화·알림·알람이 울리지 않게 앱이 휴대폰을 무음(방해 금지)으로 바꾸고, 끝내면 원래대로 돌립니다. 권한, 비행기 모드, 와이파이·블루투스·위치 중 하나라도 빠져 있으면 ‘시작 전 준비’ 화면이 먼저 나오고, 모두 마쳐야 측정을 시작할 수 있습니다. 위치 찾기의 진동은 그대로 울립니다.", style = MaterialTheme.typography.bodyMedium)
-            Text("화면이 꺼지거나 앱을 벗어난 동안의 전파는 기록되지 않습니다. 돌아오면 감시를 자동으로 이어 가고, 비어 있던 횟수와 시간을 감시 화면에 표시합니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
+            Text("화면이 꺼지거나 앱을 벗어난 동안의 전파는 기록되지 않습니다. 돌아오면 감시를 자동으로 이어 가고, 비어 있던 횟수와 시간을 감시 화면에 표시합니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodyMedium)
         }
         GuardPanel {
             Text("제대로 잡히는지 확인하기", fontWeight = FontWeight.Bold)
-            Text("빈 교실 기록을 저장한 뒤 차례로 해 보세요.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
+            Text("빈 교실 기록을 저장한 뒤 차례로 해 보세요.", color = RfColors.textDim, style = MaterialTheme.typography.bodyMedium)
             GuideList("무선 이어폰 케이스를 엽니다. 30초쯤 뒤 블루투스 칸에 뜹니다.", "다른 휴대폰의 핫스팟을 켭니다. 1분쯤 안에 와이파이 칸에 뜹니다.", "15분 넘게 그대로 둡니다. 개수가 늘지 않아야 합니다.", numbered = true)
-            Text("확인을 마친 뒤 처음부터 다시 하려면 ‘빈 교실부터 다시 측정’을 누릅니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
+            Text("확인을 마친 뒤 처음부터 다시 하려면 ‘빈 교실부터 다시 측정’을 누릅니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodyMedium)
         }
         GuardPanel {
             Text("이 앱이 보는 것", fontWeight = FontWeight.Bold)
@@ -330,24 +339,24 @@ fun GuideScreen() {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("잡는 것", fontWeight = FontWeight.Bold, color = RfColors.ok)
                 GuideList("자체 와이파이를 여는 카메라", "핫스팟을 켠 휴대폰", "와이파이 에그(휴대용 와이파이)")
-                Text("와이파이를 켜면 30초~1분 안에 보입니다. 빈 교실 기록에 없던 이름만 알리며, 이름과 설정에 따라 알리지 않는 경우가 있습니다.", style = MaterialTheme.typography.bodySmall)
+                Text("와이파이를 켜면 30초~1분 안에 보입니다. 빈 교실 기록에 없던 이름만 알리며, 이름과 설정에 따라 알리지 않는 경우가 있습니다.", style = MaterialTheme.typography.bodyMedium)
             }
         }
         Surface(color = warnDim, shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("때에 따라 잡는 것", fontWeight = FontWeight.Bold, color = RfColors.warning)
                 GuideList("무선 이어폰", "스마트워치, 스마트 안경", "블루투스를 켜 둔 채 숨긴 휴대폰")
-                Text("연결된 뒤에도 알림을 내는 제품(에어팟, 아이폰, 애플워치 등)은 계속 보입니다. 연결되면 알림을 멈추는 제품은 연결 전에만 보이고, 사라지면 목록에서도 빠집니다. 그래서 입실 직후와 시험 시작 직전에는 화면을 꼭 확인하세요.", style = MaterialTheme.typography.bodySmall)
+                Text("연결된 뒤에도 알림을 내는 제품(에어팟, 아이폰, 애플워치 등)은 계속 보입니다. 연결되면 알림을 멈추는 제품은 연결 전에만 보이고, 사라지면 목록에서도 빠집니다. 그래서 입실 직후와 시험 시작 직전에는 화면을 꼭 확인하세요.", style = MaterialTheme.typography.bodyMedium)
             }
         }
         Surface(color = RfColors.dangerDim, shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("이 앱이 못 잡는 것", fontWeight = FontWeight.Bold, color = Color(0xFFFF9A9A))
                 GuideList("블루투스와 와이파이를 끈 채 숨긴 휴대폰, LTE 모듈", "선으로 연결한 카메라, 저장만 하는 카메라", "목걸이와 귓속 초소형 수신기", "구형(클래식) 블루투스만 쓰는 기기", "화장실 등 교실 밖에서 쓰는 기기")
-                Text("이것들은 전파 탐지기(LTE 송신), 금속 탐지기(휴대폰·모듈), 눈으로 하는 확인(귀·목 뒤·단추)으로 보완해야 합니다. 앱에 아무것도 잡히지 않아도 부정행위가 없다는 뜻은 아닙니다.", style = MaterialTheme.typography.bodySmall)
+                Text("이것들은 전파 탐지기(LTE 송신), 금속 탐지기(휴대폰·모듈), 눈으로 하는 확인(귀·목 뒤·단추)으로 보완해야 합니다. 앱에 아무것도 잡히지 않아도 부정행위가 없다는 뜻은 아닙니다.", style = MaterialTheme.typography.bodyMedium)
             }
         }
-        Text("새 전파는 확인이 필요하다는 표시일 뿐 부정행위의 증거가 아닙니다. 옆 교실, 복도, 감독관 본인의 기기도 잡힙니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
+        Text("새 전파는 확인이 필요하다는 표시일 뿐 부정행위의 증거가 아닙니다. 옆 교실, 복도, 감독관 본인의 기기도 잡힙니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
@@ -456,7 +465,7 @@ private fun LazyListScope.groupRows(group: SignalGroup, open: Boolean, onToggle:
         }) { if (single) onFind(group.strongest.trackingKey) else onToggle() }
     }
     if (open && !single) {
-        item(key = "note-${group.key}") { Text("같은 종류라 어느 것이 새로 온 것인지는 구분할 수 없습니다. 가까이 잡히는 것부터 확인하세요.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall) }
+        item(key = "note-${group.key}") { Text("같은 종류라 어느 것이 새로 온 것인지는 구분할 수 없습니다. 가까이 잡히는 것부터 확인하세요.", color = RfColors.textDim, style = MaterialTheme.typography.bodyMedium) }
         items(group.devices, key = { "member-${it.trackingKey}" }) { device ->
             Box(Modifier.padding(start = 18.dp)) { SignalCard(device) { onFind(device.trackingKey) } }
         }
@@ -489,13 +498,13 @@ private fun KnownCard(group: KnownGroup, open: Boolean, onClick: () -> Unit) {
             }
             Column(Modifier.weight(1f)) {
                 Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = if (live) RfColors.textPrimary else RfColors.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(subtitle, color = RfColors.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                Text(subtitle, color = RfColors.textDim, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
                 if (group.live.size > 1 || group.baselineCount > 1) Text("빈 교실 때 ${group.baselineCount}개 · 지금 ${group.live.size}개" + if (group.live.size > 1) " · ${if (open) "접기" else "펼치기"}" else "",
-                    color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
+                    color = RfColors.textDim, style = MaterialTheme.typography.bodyMedium)
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (strongest != null) ProximityBars(strongest)
-                Text(if (strongest != null) proximityLabel(strongest) else "안 잡힘", color = if (strongest != null) classAccent(strongest.distanceClass) else RfColors.textDim, style = MaterialTheme.typography.labelMedium)
+                Text(if (strongest != null) proximityLabel(strongest) else "안 잡힘", color = if (strongest != null) classAccent(strongest.distanceClass) else RfColors.textDim, style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
@@ -637,7 +646,7 @@ private fun GuardHowTo(step: String, text: String) {
 private fun GuardCount(label: String, count: Int, modifier: Modifier = Modifier) {
     Surface(color = RfColors.surfaceAlt, shape = RoundedCornerShape(14.dp), modifier = modifier) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(label, color = RfColors.textDim, style = MaterialTheme.typography.labelMedium)
+            Text(label, color = RfColors.textDim, style = MaterialTheme.typography.bodyMedium)
             Text("${count}개", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
         }
     }
@@ -648,7 +657,7 @@ private fun GuardSectionTitle(symbol: RfSymbol, title: String, summary: String) 
     Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         RfGlyph(symbol, size = 20.dp)
         Text(title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
-        Text(summary, color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
+        Text(summary, color = RfColors.textDim, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
@@ -685,11 +694,11 @@ private fun SignalCard(device: TrackedDevice, groupNote: String? = null, calm: B
             }
             Column(Modifier.weight(1f)) {
                 Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(groupNote ?: "$subtitle · ${clock(device.firstSeenMs)}부터", color = RfColors.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                Text(groupNote ?: "$subtitle · ${clock(device.firstSeenMs)}부터", color = RfColors.textDim, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 ProximityBars(device)
-                Text(proximityLabel(device), color = if (live) classAccent(device.distanceClass) else RfColors.textDim, style = MaterialTheme.typography.labelMedium)
+                Text(proximityLabel(device), color = if (live) classAccent(device.distanceClass) else RfColors.textDim, style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
