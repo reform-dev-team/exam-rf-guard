@@ -331,6 +331,14 @@ fun GuideScreen() {
             Text("확인을 마친 뒤 처음부터 다시 하려면 ‘빈 교실부터 다시 측정’을 누릅니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
         }
         GuardPanel {
+            Text("새 와이파이가 교실 기기의 것인지 확인하기", fontWeight = FontWeight.Bold)
+            Text("프린터, 에어컨, 공기청정기 같은 교실 기기도 와이파이를 낼 수 있습니다. 이름은 누구나 바꿀 수 있어서, 이름이 교실 기기처럼 보여도 이름만으로 판단하면 안 됩니다.", style = MaterialTheme.typography.bodyMedium)
+            GuideList("빈 교실을 측정할 때 교실 기기의 전원을 평소처럼 켜 둡니다. 그때 잡힌 와이파이는 원래 있던 전파로 기록됩니다.",
+                "시험 중에 새로 뜨면 줄을 눌러 걸어가며 막대가 가장 길어지는 곳을 찾고, 그 자리에 교실 기기가 있는지 눈으로 확인합니다.",
+                "기기 정보의 제조사도 참고합니다. ‘임의 주소’로 나오면 휴대폰 핫스팟이 주로 쓰는 주소입니다. 다만 프린터 같은 기기도 이런 주소를 쓸 수 있습니다.", numbered = true)
+            Text("이 앱은 와이파이가 어떤 제품의 것인지 가려 주지 않습니다. 이름과 제조사는 기기가 스스로 알린 값이라 흉내 낼 수 있습니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
+        }
+        GuardPanel {
             Text("이 앱이 보는 것", fontWeight = FontWeight.Bold)
             Text("와이파이와 저전력 블루투스(BLE)가 주변에 내보내는 알림 신호만 봅니다. 기기끼리 이미 연결되어 주고받는 내용은 보지 못합니다.", style = MaterialTheme.typography.bodyMedium)
         }
