@@ -70,15 +70,31 @@ class SignalGroupsTest {
     @Test fun wifiIsJudgedByNameAndNewNamesAlertImmediately() {
         wifi("10:00:00:00:00:01", 0, "SCHOOL")
         wifi("10:00:00:00:00:02", 0, null)
-        val baseline = baselineAt(1_000)
+        val snapshot = SignalSnapshot.capture("A", 1_000, false, tracker.snapshot(1_000, includeInactive = true))
+        val baseline = baselineGroupCounts(snapshot)
         assertEquals(mapOf("WIFI:name:school" to 1, "WIFI:hidden" to 1), baseline)
-        // 같은 이름의 다른 주소(5GHz, 다른 층 공유기)와 이름 없는 와이파이 추가는 원래 있던 것이다.
+        // 같은 이름의 다른 주소(5GHz, 다른 층 공유기)와, 같은 공유기가 내는 이름 없는 주소 추가는 원래 있던 것이다.
         wifi("10:00:00:00:00:03", 100_000, "SCHOOL"); wifi("10:00:00:00:00:04", 100_000, null); wifi("10:00:00:00:00:01", 100_000, "SCHOOL")
-        assertEquals(0, view(baseline, 101_000).count)
+        fun now(nowMs: Long) = watchView(tracker.snapshot(nowMs, includeInactive = true), baseline, emptySet(), nowMs, baselineWifiAddresses(snapshot))
+        assertEquals(0, now(101_000).count)
         wifi("20:00:00:00:00:01", 130_000, "Galaxy S24 1234", rssi = -55)
-        val hotspot = view(baseline, 131_000).wifi.single()
+        val hotspot = now(131_000).wifi.single()
         assertTrue(hotspot.alert)
         assertEquals(0, hotspot.baselineCount)
+    }
+
+    @Test fun hiddenHotspotIsFlaggedEvenWhenTheEmptyRoomAlreadyHadAHiddenNetwork() {
+        wifi("10:00:00:00:00:02", 0, null, rssi = -50)
+        val snapshot = SignalSnapshot.capture("A", 1_000, false, tracker.snapshot(1_000, includeInactive = true))
+        val baseline = baselineGroupCounts(snapshot)
+        val routers = baselineWifiAddresses(snapshot)
+        // 빈 교실에 있던 이름 없는 와이파이는 계속 원래 있던 것이다.
+        wifi("10:00:00:00:00:02", 100_000, null, rssi = -50)
+        assertEquals(0, watchView(tracker.snapshot(101_000, includeInactive = true), baseline, emptySet(), 101_000, routers).count)
+        // 전혀 다른 주소의 이름 없는 핫스팟은 이름이 숨겨져 있어도 새 전파다.
+        wifi("da:a1:19:3b:7c:01", 100_000, null, rssi = -48)
+        val flagged = watchView(tracker.snapshot(101_000, includeInactive = true), baseline, emptySet(), 101_000, routers).wifi.single()
+        assertEquals("da:a1:19:3b:7c:01", flagged.strongest.key)
     }
 
     @Test fun hiddenNetworkFromARouterAlreadyInTheEmptyRoomIsNotNew() {

@@ -5,6 +5,9 @@ import java.util.Locale
 /** 새 주소가 이 시간 넘게 이어져야 "늘어났다"고 본다. 주소가 바뀌는 순간 옛 주소와 겹치는 것을 거른다. */
 const val ESTABLISHED_MS = 30_000L
 
+/** 이름을 숨긴 와이파이 전부가 공유하는 묶음 키. 이름이 같은 것이 아니므로 이름처럼 "원래 있던 것"으로 보면 안 된다. */
+const val HIDDEN_WIFI_KEY = "WIFI:hidden"
+
 /**
  * 주소 대신 쓰는 묶음 기준. 블루투스 주소는 10~15분마다 바뀌므로 기기가 알린 이름,
  * 이름이 없으면 회사 코드와 종류 단서로 묶는다. 와이파이는 이름으로 묶는다.
@@ -13,7 +16,7 @@ fun signalGroupKey(source: ScanSource, address: String, name: String, manufactur
     val advertised = advertisedName(address, name)
     return when {
         advertised != null -> "${source.name}:name:${advertised.lowercase(Locale.ROOT)}"
-        source == ScanSource.WIFI -> "WIFI:hidden"
+        source == ScanSource.WIFI -> HIDDEN_WIFI_KEY
         manufacturerIds.isEmpty() && hints.isEmpty() -> "BLE:unknown"
         else -> "BLE:kind:${manufacturerIds.sorted().joinToString(",")}:${hints.primary?.name.orEmpty()}"
     }
@@ -91,8 +94,9 @@ fun watchView(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowle
             key in acknowledged -> null
             // 빈 교실에 없던 묶음은 바로 보인다. 와이파이 주소는 바뀌지 않으므로 바로 알린다.
             before == 0 -> SignalGroup(key, sorted, 0, alert = wifi || established > 0)
-            // 같은 이름의 와이파이는 주소가 몇 개든 원래 있던 것이다.
-            wifi -> null
+            // 같은 이름의 와이파이는 주소가 몇 개든 원래 있던 것이다. 이름 없는 묶음은 이름이 같다는 근거가 없으므로
+            // 같은 공유기의 주소(isSameAccessPoint)는 위에서 이미 걸렀고, 남은 것이 빈 교실보다 늘면 알린다.
+            wifi && key != HIDDEN_WIFI_KEY -> null
             established > before -> SignalGroup(key, sorted, before, alert = true)
             else -> null
         }
