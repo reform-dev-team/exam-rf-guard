@@ -128,6 +128,9 @@ class BleScanner(context: Context) {
     private fun refreshScan() {
         val cb = callback ?: return
         if (!active) return
+        // 블루투스가 꺼진 것은 탐색 오류가 아니다. 오류로 남기면 다시 켜도 탐색이 재개되지 않으므로 조용히 멈춰 둔다.
+        // 다시 켜지면 AppViewModel이 새로 시작한다.
+        if (!isUsable()) { stop(); return }
         try {
             val scanner = adapter?.bluetoothLeScanner ?: run { fail("블루투스 상태가 바뀌었습니다 · 다시 시작하세요"); return }
             scanner.stopScan(cb)
