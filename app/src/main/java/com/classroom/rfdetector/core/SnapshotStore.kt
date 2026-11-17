@@ -38,7 +38,7 @@ class SnapshotStore(private val directory: File) {
         }
     }
 
-    private fun encode(snapshot: SignalSnapshot) = JSONObject().apply {
+    internal fun encode(snapshot: SignalSnapshot) = JSONObject().apply {
         put("area", snapshot.area)
         put("capturedAtMs", snapshot.capturedAtMs)
         put("simulation", snapshot.simulation)
@@ -54,7 +54,7 @@ class SnapshotStore(private val directory: File) {
         } })
     }
 
-    private fun decode(json: JSONObject): SignalSnapshot {
+    internal fun decode(json: JSONObject): SignalSnapshot {
         val rows = json.getJSONArray("signals")
         val signals = (0 until rows.length()).map { index -> rows.getJSONObject(index).let { row ->
             SnapshotSignal(row.getString("address"), ScanSource.valueOf(row.getString("source")), row.getString("name"),

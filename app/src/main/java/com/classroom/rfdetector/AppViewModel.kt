@@ -3,6 +3,11 @@ package com.classroom.rfdetector
 import android.content.Context
 import android.location.LocationManager
 import android.os.Build
+import android.os.SystemClock
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import com.classroom.rfdetector.core.SessionRecovery
+import com.classroom.rfdetector.core.SessionRecoveryStore
 import android.provider.Settings
 import androidx.core.location.LocationManagerCompat
 import androidx.lifecycle.ViewModel
@@ -36,6 +41,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -79,6 +85,13 @@ class AppViewModel(private val app: Context) : ViewModel() {
     val snapshotBusy = MutableStateFlow(true)
     val snapshotError = MutableStateFlow<String?>(null)
     private val snapshotStore = SnapshotStore(app.filesDir)
+    private val recoveryStore = SessionRecoveryStore(app.filesDir)
+    val pendingRecovery = MutableStateFlow<SessionRecovery?>(null)
+    val recoveryLoading = MutableStateFlow(true)
+    val recoveryError = MutableStateFlow<String?>(null)
+    internal val recoveryPendingWrites = MutableStateFlow(0)
+    private var recoveryRevision = 0L
+    private var lastCheckpointElapsedMs = 0L
     private var baselineGroups: Map<String, Int> = emptyMap()
     private var baselineWifi: Set<String> = emptySet()
     private var baselineSamples: List<SnapshotSignal> = emptyList()
@@ -110,6 +123,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
                 DeviceIdentityResolver(rows("mac-vendors.tsv"), rows("bluetooth-companies.tsv").mapKeys { it.key.toInt() })
             }
         }
+        loadRecovery()
         scope.launch {
             try {
                 savedBaseline.value = withContext(archiveDispatcher) { snapshotStore.load() }.filter { !it.simulation }.maxByOrNull { it.capturedAtMs }
@@ -119,6 +133,72 @@ class AppViewModel(private val app: Context) : ViewModel() {
                 snapshotError.value = "저장된 빈 교실 기록을 읽지 못했습니다. 새로 측정해 주세요."
             } finally { snapshotBusy.value = false }
         }
+    }
+
+    private fun loadRecovery() {
+        val revision = recoveryRevision
+        scope.launch {
+            try {
+                val saved = withContext(archiveDispatcher) { recoveryStore.load() }
+                if (revision == recoveryRevision) {
+                    if (saved != null && !saved.canRestore(System.currentTimeMillis())) {
+                        discardRecovery()
+                    } else pendingRecovery.value = saved
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                recoveryError.value = "이전 감시를 읽지 못했습니다. 저장한 빈 교실 기록으로 새 감시를 시작할 수 있습니다."
+            } finally { recoveryLoading.value = false }
+        }
+    }
+
+    /** Writes are serialized with baseline storage; a stop tombstone follows earlier checkpoints. */
+    private fun writeRecovery(record: SessionRecovery?) {
+        recoveryRevision++
+        recoveryPendingWrites.update { it + 1 }
+        storageScope.launch {
+            try {
+                recoveryStore.save(record)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                recoveryError.value = "감시 복구 기록을 저장하지 못했습니다. 종료 시 최근 확인 처리가 유실되거나 이전 복원 기록이 남을 수 있습니다."
+            } finally { recoveryPendingWrites.update { it - 1 } }
+        }
+    }
+
+    private fun checkpointRecovery(interruptedAtMs: Long? = pausedAtMs) {
+        if (simMode.value || (!scanning.value && pausedAtMs == null)) return
+        val baseline = baselineSnapshot.value?.takeUnless { it.simulation } ?: return
+        val session = scanSession.value ?: return
+        lastCheckpointElapsedMs = SystemClock.elapsedRealtime()
+        writeRecovery(SessionRecovery(session, baseline, acknowledged.value.toSet(), System.currentTimeMillis(), interruptedAtMs))
+    }
+
+    fun discardRecovery() {
+        pendingRecovery.value = null
+        writeRecovery(null)
+    }
+
+    /** Only an explicit confirmation may resume a checkpoint in a new process. */
+    fun restoreSession(): Boolean {
+        val recovery = pendingRecovery.value ?: return false
+        if (scanning.value || closed || simMode.value) return false
+        if (!recovery.canRestore(System.currentTimeMillis())) {
+            discardRecovery()
+            recoveryError.value = "이전 감시 기록의 시간이 유효하지 않거나 24시간이 지났습니다. 새 감시를 시작해 주세요."
+            return false
+        }
+        checkExamMode()
+        if (requiredPermissions().any { ContextCompat.checkSelfPermission(app, it) != PackageManager.PERMISSION_GRANTED } ||
+            silenceMissing.value || problems.value.isNotEmpty() || (airplaneOff.value && !BuildConfig.DEBUG)) {
+            recoveryError.value = "시작 전 준비를 마친 뒤 이전 감시를 복원해 주세요."
+            return false
+        }
+        pendingRecovery.value = null
+        begin(resumedPauseAtMs = null, recovery = recovery)
+        return true
     }
 
     /** API 레벨별로 런타임 요청이 필요한 권한 목록 */
@@ -140,24 +220,37 @@ class AppViewModel(private val app: Context) : ViewModel() {
         return !LocationManagerCompat.isLocationEnabled(lm)
     }
 
-    fun startScan() = begin(resumedPauseAtMs = null)
+    fun startScan() {
+        if (closed || scanning.value) return
+        discardRecovery()
+        begin(resumedPauseAtMs = null)
+    }
 
     /** 앱이 화면 밖으로 나가면 수신을 멈추되, 돌아오면 같은 감시를 이어 간다. */
     fun pauseForBackground() {
         if (!scanning.value) return
-        stopScan(keepSilent = true)
+        stopReceiving(keepSilent = true)
         pausedAtMs = System.currentTimeMillis()
+        checkpointRecovery()
     }
 
     fun resumeFromBackground() {
         begin(pausedAtMs ?: return)
     }
 
-    private fun begin(resumedPauseAtMs: Long?) {
+    private fun begin(resumedPauseAtMs: Long?, recovery: SessionRecovery? = null) {
         if (scanning.value || closed) return
         pausedAtMs = null
         val paused = scanSession.value?.takeIf { resumedPauseAtMs != null }
-        if (paused != null) {
+        if (recovery != null) {
+            tracker.clear()
+            _devices.value = emptyList()
+            watch.value = WatchView()
+            findTarget.value = null
+            baselineSnapshot.value = recovery.baseline
+            acknowledged.value = recovery.acknowledged
+            scanSession.value = recovery.restoredSession(System.currentTimeMillis())
+        } else if (paused != null) {
             scanSession.value = paused.copy(pauses = paused.pauses + 1,
                 pausedMs = paused.pausedMs + (System.currentTimeMillis() - resumedPauseAtMs!!).coerceAtLeast(0))
         } else {
@@ -170,6 +263,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
         applyBaseline()
         scanning.value = true
         checkExamMode()
+        checkpointRecovery()
         if (simMode.value) {
             if (paused == null) sim.reset()
             simJob = scope.launch {
@@ -206,15 +300,24 @@ class AppViewModel(private val app: Context) : ViewModel() {
 
     /** keepSilent: 앱을 잠시 벗어난 동안에도 시험 중이므로 무음을 유지한다. */
     fun stopScan(keepSilent: Boolean = false) {
-        if (!keepSilent) silent.off()
-        if (!scanning.value) return
-        refresh()
+        pausedAtMs = null
+        stopReceiving(keepSilent)
+        discardRecovery()
+    }
+
+    private fun stopReceiving(keepSilent: Boolean) {
+        if (!scanning.value) {
+            if (!keepSilent) silent.off()
+            return
+        }
         scanning.value = false
+        refresh()
         simJob?.cancel(); simJob = null
         refreshJob?.cancel(); refreshJob = null
         ble.stop()
         wifi.stop()
         if (geigerOn.value) setGeiger(false)
+        if (!keepSilent) silent.off()
     }
 
     private fun applyBaseline() {
@@ -243,6 +346,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
                         baselineSnapshot.value = snapshot
                         applyBaseline()
                         refresh()
+                        checkpointRecovery()
                     }
                 }
             } catch (cancelled: CancellationException) {
@@ -262,6 +366,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
 
     /** 빈 교실 기록을 비운다. 다음 시작은 1단계 측정부터다. */
     fun resetBaseline() {
+        discardRecovery()
         baselineSnapshot.value = null
         watch.value = WatchView()
         applyBaseline()
@@ -276,6 +381,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
 
     fun acknowledge(groupKey: String) {
         acknowledged.value += groupKey
+        checkpointRecovery()
         refresh() // 다음 갱신 주기를 기다리지 않고 목록에서 바로 뺀다.
     }
 
@@ -303,6 +409,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
     private fun refresh() {
         val now = System.currentTimeMillis()
         healthTick.value = now
+        if (scanning.value && recoveryPendingWrites.value == 0 && SystemClock.elapsedRealtime() - lastCheckpointElapsedMs >= 15_000L) checkpointRecovery()
         val list = tracker.snapshot(now, includeInactive = true).map { d ->
             d.copy(identity = identityResolver.resolve(d.key, d.displayName, setOf(d.source), d.manufacturerIds))
         }
@@ -326,7 +433,9 @@ class AppViewModel(private val app: Context) : ViewModel() {
     )
 
     fun shutdown() {
-        stopScan()
+        if (closed) return
+        if (scanning.value) checkpointRecovery(interruptedAtMs = System.currentTimeMillis())
+        stopReceiving(keepSilent = false)
         closed = true
         scope.cancel()
     }

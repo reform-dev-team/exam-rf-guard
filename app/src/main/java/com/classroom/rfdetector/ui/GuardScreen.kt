@@ -40,6 +40,7 @@ private val okDim = Color(0xFF12301F)
 private val warnDim = Color(0xFF3A2910)
 
 private fun clock(timeMs: Long): String = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timeMs))
+private fun recoveryTime(timeMs: Long): String = SimpleDateFormat("MM/dd HH:mm:ss", Locale.getDefault()).format(Date(timeMs))
 private fun minSec(seconds: Int) = if (seconds >= 60) "${seconds / 60}분 ${seconds % 60}초" else "${seconds}초"
 
 /**
@@ -54,6 +55,10 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
     val baselineSet by vm.baselineSet.collectAsState()
     val baseline by vm.baselineSnapshot.collectAsState()
     val saved by vm.savedBaseline.collectAsState()
+    val recovery by vm.pendingRecovery.collectAsState()
+    val recoveryLoading by vm.recoveryLoading.collectAsState()
+    val recoveryError by vm.recoveryError.collectAsState()
+    var confirmRecovery by remember { mutableStateOf(false) }
     val busy by vm.snapshotBusy.collectAsState()
     val error by vm.snapshotError.collectAsState()
     val session by vm.scanSession.collectAsState()
@@ -103,6 +108,17 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             when (phase) {
                 GuardPhase.READY -> {
+                    recovery?.let { record ->
+                        item {
+                            GuardPanel {
+                                Text("이어서 복원할 감시가 있습니다", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text("시작 ${recoveryTime(record.session.startedAtMs)} · 마지막 저장 ${recoveryTime(record.savedAtMs)}", color = RfColors.textDim)
+                                Text("빈 교실 기록과 확인 처리 ${record.acknowledged.size}건을 이어 씁니다. 같은 시험·같은 교실에서만 복원하세요.")
+                                Button(onClick = { confirmRecovery = true }, modifier = Modifier.fillMaxWidth()) { Text("이전 감시 복원") }
+                                TextButton(onClick = { vm.discardRecovery() }) { Text("이전 감시 버리기") }
+                            }
+                        }
+                    }
                     item {
                         GuardPanel {
                             Text("수험생이 들어오기 전,\n빈 교실에서 시작하세요", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -118,7 +134,7 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                     }
                     saved?.let { record ->
                         item {
-                            OutlinedButton(onClick = { vm.useSavedBaseline(); onStart() }, modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(enabled = !recoveryLoading, onClick = { vm.useSavedBaseline(); onStart() }, modifier = Modifier.fillMaxWidth()) {
                                 Text("${clock(record.capturedAtMs)}에 저장한 기록으로 바로 감시")
                             }
                         }
@@ -184,6 +200,9 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                     if (watching) {
                         item { Text("이 화면이 켜져 있는 동안에만 감시합니다. 화면은 자동으로 꺼지지 않으니 전원 버튼을 누르거나 다른 앱으로 가지 마세요. 충전기를 꽂아 두면 좋습니다.${if (silenceMissing || simulation) "" else " 감시 중에는 전화·알림·알람이 울리지 않게 휴대폰을 무음으로 바꿔 둡니다."}", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall) }
                         problemItems(problems)
+                        session?.takeIf { it.recoveries > 0 }?.let {
+                            item { GuardNotice("종료된 감시를 복원했습니다", "${it.recoveries}회 복원 · 마지막 저장 또는 일시 중단부터 재개까지 총 ${minSec((it.uncertainMs / 1000).toInt())}은 수신 여부를 보장할 수 없습니다. 이전 확인 처리는 유지하고 전파는 새로 받고 있습니다.") }
+                        }
                         session?.takeIf { it.pauses > 0 }?.let {
                             item { GuardNotice("앱을 벗어나 있던 시간이 있습니다", "${it.pauses}회, 총 ${minSec((it.pausedMs / 1000).toInt())} 동안은 전파를 받지 못했습니다. 화면을 끄거나 다른 앱을 쓰는 동안에는 감시가 멈추고, 돌아오면 자동으로 이어집니다.") }
                         }
@@ -207,12 +226,13 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                 }
             }
             error?.let { message -> item { Text(message, color = RfColors.warning, style = MaterialTheme.typography.bodySmall) } }
+            recoveryError?.let { message -> item { Text(message, color = RfColors.warning, style = MaterialTheme.typography.bodySmall) } }
         }
         Surface(color = RfColors.surface) {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (phase == GuardPhase.WATCH || phase == GuardPhase.ENDED) Text("이 앱은 와이파이와 저전력 블루투스(BLE) 신호만 봅니다. 아무것도 잡히지 않아도 부정행위가 없다는 뜻은 아닙니다. LTE만 쓰는 기기는 보이지 않습니다.", color = RfColors.textDim, style = MaterialTheme.typography.labelSmall)
                 when (phase) {
-                    GuardPhase.READY -> MainButton("빈 교실 측정 시작", onClick = onStart)
+                    GuardPhase.READY -> MainButton(if (recoveryLoading) "이전 감시 확인 중" else "빈 교실 측정 시작", enabled = !recoveryLoading, onClick = onStart)
                     GuardPhase.COLLECT -> MainButton(if (collected || elapsed >= COLLECT_SECONDS) "빈 교실 기록 저장" else "빈 교실 기록 저장 · ${minSec(COLLECT_SECONDS - elapsed)} 뒤",
                         enabled = devices.isNotEmpty() && !busy && collected) { vm.takeBaseline() }
                     GuardPhase.WATCH -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -229,6 +249,13 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
         }
     }
 
+    if (confirmRecovery && recovery != null) AlertDialog(
+        onDismissRequest = { confirmRecovery = false },
+        title = { Text("같은 시험·같은 교실인가요?") },
+        text = { Text("${recoveryTime(recovery!!.session.startedAtMs)}에 시작한 감시의 빈 교실 기록과 확인 처리 ${recovery!!.acknowledged.size}건을 복원합니다.\n\n이전에 확인한 묶음은 계속 알리지 않습니다. 다른 교시·교실이라면 복원하지 마세요. 종료 전 신호 목록은 복원하지 않고 새로 수신합니다.") },
+        confirmButton = { TextButton(onClick = { confirmRecovery = false; vm.restoreSession() }) { Text("같은 시험·교실로 이어가기") } },
+        dismissButton = { TextButton(onClick = { confirmRecovery = false }) { Text("취소") } },
+    )
     if (confirmRestart) AlertDialog(onDismissRequest = { confirmRestart = false }, title = { Text("빈 교실부터 다시 측정할까요?") },
         text = { Text("지금의 빈 교실 기록과 목록을 비우고 2분 측정부터 다시 합니다.\n\n수험생이 있는 상태에서 다시 측정하면 수험생의 기기가 원래 있던 전파로 기록되어, 이후에는 알리지 않습니다.") },
         confirmButton = { TextButton(onClick = { confirmRestart = false; if (blocked) { vm.stopScan(); vm.resetBaseline() } else vm.restartFromEmptyRoom() }) { Text("다시 측정") } },
