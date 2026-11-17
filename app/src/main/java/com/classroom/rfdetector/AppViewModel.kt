@@ -22,6 +22,7 @@ import com.classroom.rfdetector.core.WatchView
 import com.classroom.rfdetector.core.baselineGroupCounts
 import com.classroom.rfdetector.core.baselineSamples
 import com.classroom.rfdetector.core.baselineWifiAddresses
+import com.classroom.rfdetector.core.baselineWifiAddressesByName
 import com.classroom.rfdetector.core.watchView
 import com.classroom.rfdetector.scanner.BleScanner
 import com.classroom.rfdetector.scanner.WifiScanner
@@ -81,6 +82,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
     private val snapshotStore = SnapshotStore(app.filesDir)
     private var baselineGroups: Map<String, Int> = emptyMap()
     private var baselineWifi: Set<String> = emptySet()
+    private var baselineWifiByName: Map<String, Set<String>> = emptyMap()
     private var baselineSamples: List<SnapshotSignal> = emptyList()
 
     /** 빈 교실 기록과 비교해 지금 잡히는 전파를 묶음으로 나눈 결과. */
@@ -89,7 +91,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
     private var problemsCheckedAtMs = 0L
     /** 위치 찾기 대상(trackingKey). 지정하면 근접 진동이 이 기기를 따른다. */
     val findTarget = MutableStateFlow<String?>(null)
-    /** 감독관이 "확인함"으로 표시한 묶음(groupKey). 이번 감시 동안만 유지한다. */
+    /** 감독관이 "확인함"으로 표시한 묶음(groupKey)이나 주소(이름 숨김·이름만 같은 와이파이). 이번 감시 동안만 유지한다. */
     val acknowledged = MutableStateFlow<Set<String>>(emptySet())
     private var pausedAtMs: Long? = null
     private val silent = SilentMode(app)
@@ -222,6 +224,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
         baselineSet.value = baseline != null
         baselineGroups = baseline?.let(::baselineGroupCounts) ?: emptyMap()
         baselineWifi = baseline?.let(::baselineWifiAddresses) ?: emptySet()
+        baselineWifiByName = baseline?.let(::baselineWifiAddressesByName) ?: emptyMap()
         baselineSamples = baseline?.let { baselineSamples(it) } ?: emptyList()
     }
 
@@ -274,8 +277,8 @@ class AppViewModel(private val app: Context) : ViewModel() {
         startScan()
     }
 
-    fun acknowledge(groupKey: String) {
-        acknowledged.value += groupKey
+    fun acknowledge(key: String) {
+        acknowledged.value += key
         refresh() // 다음 갱신 주기를 기다리지 않고 목록에서 바로 뺀다.
     }
 
@@ -307,7 +310,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
             d.copy(identity = identityResolver.resolve(d.key, d.displayName, setOf(d.source), d.manufacturerIds))
         }
         _devices.value = list
-        val view = if (baselineSet.value) watchView(list, baselineGroups, acknowledged.value, now, baselineWifi, baselineSamples) else WatchView()
+        val view = if (baselineSet.value) watchView(list, baselineGroups, acknowledged.value, now, baselineWifi, baselineSamples, baselineWifiByName) else WatchView()
         watch.value = view
         geiger.setClass(list.firstOrNull { it.trackingKey == findTarget.value && it.presence == SignalPresence.RECENT }?.distanceClass ?: DistanceClass.UNKNOWN)
         // 설정 상태 확인은 1초에 한 번이면 충분하다.

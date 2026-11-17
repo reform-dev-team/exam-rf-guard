@@ -133,6 +133,91 @@ class SignalGroupsTest {
         assertEquals("da:a1:19:3b:7c:01", view.wifi.single().strongest.key)
     }
 
+    /** 실제 앱(AppViewModel)이 넘기는 것과 같은 인자로 본다. */
+    private fun watch(snapshot: SignalSnapshot, nowMs: Long, acknowledged: Set<String> = emptySet()) =
+        watchView(tracker.snapshot(nowMs, includeInactive = true), baselineGroupCounts(snapshot), acknowledged, nowMs,
+            baselineWifiAddresses(snapshot), baselineSamples(snapshot), baselineWifiAddressesByName(snapshot))
+
+    @Test fun hotspotRenamedToAnEmptyRoomNetworkIsFlaggedByItsUnrelatedAddress() {
+        wifi("b4:a9:4f:c7:31:a2", 0, "SCHOOL", rssi = -60)
+        wifi("b4:a9:4f:d0:12:10", 0, "SCHOOL", rssi = -75)
+        val snapshot = SignalSnapshot.capture("A", 1_000, false, tracker.snapshot(1_000, includeInactive = true))
+        assertEquals(mapOf("WIFI:name:school" to setOf("B4:A9:4F:C7:31:A2", "B4:A9:4F:D0:12:10")), baselineWifiAddressesByName(snapshot))
+
+        // 측정 때 빠졌던 같은 회사 공유기와, 첫 자리만 바꿔 만든 주소는 계속 원래 있던 것이다.
+        wifi("b4:a9:4f:e1:00:33", 100_000, "SCHOOL", rssi = -70)
+        wifi("c6:a9:4f:e1:00:34", 100_000, "SCHOOL", rssi = -70)
+        assertEquals(0, watch(snapshot, 101_000).count)
+        assertEquals(2, watch(snapshot, 101_000).knownGroups.single().live.size)
+
+        // 이름을 SCHOOL로 맞춘 핫스팟. 무작위 주소라 그 이름으로 기록된 공유기들과 계열이 다르다.
+        wifi("da:a1:19:3b:7c:01", 100_000, "SCHOOL", rssi = -50)
+        val view = watch(snapshot, 101_000)
+        val group = view.wifi.single()
+        assertEquals("WIFI:name:school", group.key)
+        assertTrue(group.sameNameOnly)
+        assertTrue("Wi-Fi addresses do not rotate, so it alerts at once", group.alert)
+        assertEquals(listOf("da:a1:19:3b:7c:01"), group.devices.map { it.key })
+        assertEquals("The flagged address is not also counted as an empty-room router", 2, view.knownGroups.single().live.size)
+
+        // 이름이 같아도 "확인함" 버튼은 새 전파로 올라온 주소에만 뜬다.
+        val devices = tracker.snapshot(101_000, includeInactive = true)
+        assertNull(view.flaggedGroupOf(devices.first { it.key == "b4:a9:4f:e1:00:33" }))
+        assertSame(group, view.flaggedGroupOf(devices.first { it.key == "da:a1:19:3b:7c:01" }))
+    }
+
+    @Test fun confirmingOneRenamedHotspotDoesNotHideTheNextOne() {
+        wifi("b4:a9:4f:c7:31:a2", 0, "SCHOOL")
+        val snapshot = SignalSnapshot.capture("A", 1_000, false, tracker.snapshot(1_000, includeInactive = true))
+
+        wifi("da:a1:19:3b:7c:01", 100_000, "SCHOOL", rssi = -50)
+        val first = watch(snapshot, 101_000).wifi.single()
+        val acknowledged = setOf(first.acknowledgeKeyOf(first.strongest))
+        assertEquals(setOf("WIFI:address:DA:A1:19:3B:7C:01"), acknowledged)
+        val confirmed = watch(snapshot, 101_000, acknowledged)
+        assertEquals(0, confirmed.count)
+        assertEquals("Once confirmed it is listed with the networks of that name", 1, confirmed.knownGroups.single().live.size)
+
+        // 나중에 같은 이름으로 켜진 다른 핫스팟은 알린다.
+        wifi("3e:55:01:9a:20:7f", 150_000, "SCHOOL", rssi = -52)
+        assertEquals(listOf("3e:55:01:9a:20:7f"), watch(snapshot, 151_000, acknowledged).wifi.single().devices.map { it.key })
+    }
+
+    @Test fun weakSameNameNetworkOnAnUnrelatedAddressStaysInTheFarBucket() {
+        wifi("b4:a9:4f:c7:31:a2", 0, "SCHOOL")
+        val snapshot = SignalSnapshot.capture("A", 1_000, false, tracker.snapshot(1_000, includeInactive = true))
+        wifi("00:1d:aa:10:20:30", 100_000, "SCHOOL", rssi = -90)
+        val view = watch(snapshot, 101_000)
+        assertEquals(0, view.count)
+        assertTrue(view.far.single().sameNameOnly)
+    }
+
+    @Test fun sameNameRuleLeavesOtherCasesAsTheyWere() {
+        wifi("b4:a9:4f:c7:31:a2", 0, "SCHOOL")
+        wifi("70:5d:cc:01:02:03", 0, "KT_Guest")
+        val snapshot = SignalSnapshot.capture("A", 1_000, false, tracker.snapshot(1_000, includeInactive = true))
+        // KT_Guest를 내던 공유기가 끝 자리만 다른 주소로 SCHOOL을 내면 같은 공유기다. 계열 비교보다 먼저 본다.
+        wifi("70:5d:cc:01:02:04", 100_000, "SCHOOL")
+        assertEquals(0, watch(snapshot, 101_000).count)
+        // 빈 교실에 없던 이름은 전처럼 이름 묶음으로 알리고, 묶음째 확인함으로 뺀다.
+        wifi("da:a1:19:3b:7c:01", 100_000, "Galaxy S24 1234")
+        val fresh = watch(snapshot, 101_000).wifi.single()
+        assertFalse(fresh.sameNameOnly)
+        assertEquals("WIFI:name:galaxy s24 1234", fresh.acknowledgeKeyOf(fresh.strongest))
+    }
+
+    @Test fun makerFamilyComparesTheSecondAndThirdOctets() {
+        val known = setOf("B4:A9:4F:C7:31:A2")
+        assertTrue(isSameMakerFamily("b4:a9:4f:00:00:01", known))
+        assertTrue("A router-made address that only changes the first octet", isSameMakerFamily("C6:A9:4F:00:00:01", known))
+        assertFalse(isSameMakerFamily("B4:A9:50:C7:31:A2", known))
+        assertFalse(isSameMakerFamily("DA:A1:19:3B:7C:01", known))
+        // 비교할 수 없으면 판단하지 않는다: 주소 형식이 아니거나(가상 전파), 그 이름으로 기록된 주소가 없을 때.
+        assertTrue(isSameMakerFamily("sim-hotspot", known))
+        assertTrue(isSameMakerFamily("DA:A1:19:3B:7C:01", emptySet()))
+        assertTrue(isSameMakerFamily("DA:A1:19:3B:7C:01", setOf("sim-hotspot")))
+    }
+
     @Test fun knownListKeepsTheEmptyRoomOrderAndOnlyItsStateChanges() {
         wifi("10:00:00:00:00:01", 0, "SCHOOL", rssi = -70)
         ble("AA:00:00:00:00:01", 0, rssi = -50); ble("AA:00:00:00:00:02", 0, rssi = -80)

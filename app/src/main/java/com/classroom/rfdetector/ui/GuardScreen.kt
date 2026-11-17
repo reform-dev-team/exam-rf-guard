@@ -27,7 +27,6 @@ import androidx.compose.ui.unit.dp
 import com.classroom.rfdetector.AppViewModel
 import com.classroom.rfdetector.BuildConfig
 import com.classroom.rfdetector.RadioProblem
-import com.classroom.rfdetector.core.acknowledgeKey
 import com.classroom.rfdetector.core.*
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -257,7 +256,8 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
     val live = device.presence != SignalPresence.HISTORY
     val accent = if (live) classAccent(device.distanceClass) else RfColors.textDim
     // 새 전파로 올라온 것만 "확인함"으로 뺄 수 있다. 원래 있던 전파는 뺄 목록이 없다.
-    val flagged = (watch.wifi + watch.bluetooth + watch.far).any { it.key == device.groupKey }
+    val flaggedGroup = watch.flaggedGroupOf(device)
+    val flagged = flaggedGroup != null
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -270,6 +270,7 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
                 }
             }
             kindNote(device)?.let { Text(it) }
+            if (flaggedGroup?.sameNameOnly == true) Text(SAME_NAME_ONLY_NOTE)
             GuardPanel {
                 Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     ProximityBars(device, barWidth = 44.dp, maxHeight = 150.dp)
@@ -299,7 +300,7 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
         }
         Surface(color = RfColors.surface) {
             Row(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (flagged) OutlinedButton(onClick = { vm.acknowledge(device.acknowledgeKey); close() }, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = RoundedCornerShape(16.dp)) { Text("확인함\n목록에서 빼기") }
+                if (flaggedGroup != null) OutlinedButton(onClick = { vm.acknowledge(flaggedGroup.acknowledgeKeyOf(device)); close() }, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = RoundedCornerShape(16.dp)) { Text("확인함\n목록에서 빼기") }
                 Button(onClick = close, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = RfColors.surfaceAlt, contentColor = RfColors.textPrimary)) { Text("목록으로", fontWeight = FontWeight.Bold) }
             }
@@ -338,7 +339,7 @@ fun GuideScreen() {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("잡는 것", fontWeight = FontWeight.Bold, color = RfColors.ok)
                 GuideList("자체 와이파이를 여는 카메라", "핫스팟을 켠 휴대폰", "와이파이 에그(휴대용 와이파이)")
-                Text("와이파이를 켜면 30초~1분 안에 보입니다. 빈 교실 기록에 없던 이름만 알리며, 이름과 설정에 따라 알리지 않는 경우가 있습니다.", style = MaterialTheme.typography.bodySmall)
+                Text("와이파이를 켜면 30초~1분 안에 보입니다. 빈 교실 기록에 없던 이름과, 이름은 같아도 주소 계열이 다른 것을 알립니다. 이름과 주소, 설정에 따라 알리지 않는 경우가 있습니다.", style = MaterialTheme.typography.bodySmall)
             }
         }
         Surface(color = warnDim, shape = RoundedCornerShape(18.dp)) {
@@ -427,6 +428,9 @@ private fun infoRows(device: TrackedDevice): List<Pair<String, String>> = buildL
     add("주소" to device.key)
 }
 
+/** 이름만 같은 와이파이가 왜 새 전파로 올라왔는지. 핫스팟이라고 단정하지 않는다. */
+private const val SAME_NAME_ONLY_NOTE = "빈 교실 기록에 같은 이름의 와이파이가 있었지만, 이 주소는 그때 기록된 공유기들과 계열이 다릅니다. 이름을 똑같이 맞춘 핫스팟일 수 있고, 측정 때 잡히지 않았던 다른 회사 공유기일 수도 있습니다."
+
 /** 의심으로 읽히기 쉬운 종류에 붙이는 설명. */
 private fun kindNote(device: TrackedDevice): String? = when {
     SignalHint.HEARING_AID in device.hints -> "보청기는 허용된 의료기기일 수 있습니다."
@@ -458,6 +462,7 @@ private fun LazyListScope.groupRows(group: SignalGroup, open: Boolean, onToggle:
     val single = group.devices.size == 1
     item(key = "group-${group.key}") {
         SignalCard(group.strongest, when {
+            single && group.sameNameOnly -> "이름만 같고 주소 계열이 다름 · ${clock(group.strongest.firstSeenMs)}부터"
             single -> null
             group.baselineCount == 0 -> "같은 전파 ${group.devices.size}개 · ${if (open) "접기" else "펼치기"}"
             else -> "빈 교실 때 ${group.baselineCount}개 → 지금 ${group.devices.size}개 · ${if (open) "접기" else "펼치기"}"
