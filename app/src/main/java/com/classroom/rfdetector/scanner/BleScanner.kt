@@ -71,6 +71,7 @@ class BleScanner(context: Context) {
                         txPower = null,
                         hidden = false,
                         timestampMs = observedAt,
+                        elapsedRealtimeNanos = observedElapsedNanos,
                         manufacturerIds = result.scanRecord?.manufacturerSpecificData?.let { data ->
                             (0 until data.size()).map { data.keyAt(it) }.toSet()
                         } ?: emptySet(),

@@ -29,6 +29,7 @@ import com.classroom.rfdetector.BuildConfig
 import com.classroom.rfdetector.RadioProblem
 import com.classroom.rfdetector.core.acknowledgeKey
 import com.classroom.rfdetector.core.*
+import com.classroom.rfdetector.inspection.flow.walkSignalUsable
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -47,7 +48,8 @@ private fun minSec(seconds: Int) = if (seconds >= 60) "${seconds / 60}분 ${seco
  * 빈 교실에 없던 블루투스·와이파이가 지금 잡히는지를 보여 준다.
  */
 @Composable
-fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Unit, onRequestPermissions: () -> Unit, onOpenSettings: () -> Unit, onFind: (String) -> Unit) {
+fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Unit, onRequestPermissions: () -> Unit,
+    onOpenSettings: () -> Unit, onFind: (String) -> Unit, onWalk: () -> Unit) {
     val devices by vm.devices.collectAsState()
     val scanning by vm.scanning.collectAsState()
     val simulation by vm.simMode.collectAsState()
@@ -184,6 +186,11 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                     if (watching) {
                         item { Text("이 화면이 켜져 있는 동안에만 감시합니다. 화면은 자동으로 꺼지지 않으니 전원 버튼을 누르거나 다른 앱으로 가지 마세요. 충전기를 꽂아 두면 좋습니다.${if (silenceMissing || simulation) "" else " 감시 중에는 전화·알림·알람이 울리지 않게 휴대폰을 무음으로 바꿔 둡니다."}", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall) }
                         problemItems(problems)
+                        if (!simulation) item {
+                            OutlinedButton(onClick = onWalk, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                                Text("교실 둘러보기 · 블루투스")
+                            }
+                        }
                         session?.takeIf { it.pauses > 0 }?.let {
                             item { GuardNotice("앱을 벗어나 있던 시간이 있습니다", "${it.pauses}회, 총 ${minSec((it.pausedMs / 1000).toInt())} 동안은 전파를 받지 못했습니다. 화면을 끄거나 다른 앱을 쓰는 동안에는 감시가 멈추고, 돌아오면 자동으로 이어집니다.") }
                         }
@@ -245,7 +252,7 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
 
 /** 한 전파에 다가가며 세기를 보는 화면. */
 @Composable
-fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
+fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit, fromWalk: Boolean = false) {
     val devices by vm.devices.collectAsState()
     val geigerOn by vm.geigerOn.collectAsState()
     val scanning by vm.scanning.collectAsState()
@@ -253,9 +260,19 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
     val baseline by vm.baselineSnapshot.collectAsState()
     val device = devices.firstOrNull { it.trackingKey == trackingKey }
     val close = { vm.findTarget.value = null; vm.setGeiger(false); onBack() }
-    if (device == null) { LaunchedEffect(Unit) { close() }; return }
+    if (device == null) {
+        if (fromWalk) Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("선택한 전파를 지금 받을 수 없습니다.")
+            Text("같은 주소가 다시 잡히면 표시됩니다. 다른 주소로 바꾸지 않습니다.", color = RfColors.textDim)
+            OutlinedButton(onClick = close) { Text("둘러보기 결과로") }
+        } else {
+            LaunchedEffect(Unit) { close() }
+        }
+        return
+    }
     val (kind, symbol) = plainKind(device)
-    val live = device.presence != SignalPresence.HISTORY
+    val walkRadioReady = fromWalk && vm.walkUi.collectAsState().value.available
+    val live = if (fromWalk) walkRadioReady && walkSignalUsable(device) else device.presence != SignalPresence.HISTORY
     val accent = if (live) classAccent(device.distanceClass) else RfColors.textDim
     // 새 전파로 올라온 것만 "확인함"으로 뺄 수 있다. 원래 있던 전파는 뺄 목록이 없다.
     val flaggedGroup = (watch.wifi + watch.bluetooth + watch.far).firstOrNull { it.key == device.groupKey }
@@ -279,16 +296,30 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
             kindNote(device)?.let { Text(it) }
             GuardPanel {
                 Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ProximityBars(device, barWidth = 44.dp, maxHeight = 150.dp)
-                    Text(proximityLabel(device), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = accent)
+                    if (fromWalk && walkRadioReady) FineSignal(device)
+                    else if (!fromWalk) ProximityBars(device, barWidth = 44.dp, maxHeight = 150.dp)
+                    val label = when {
+                        !fromWalk || live -> proximityLabel(device)
+                        !walkRadioReady || device.presence != SignalPresence.RECENT -> "현재 수신 없음"
+                        else -> "신호가 약하거나 세기를 알 수 없음"
+                    }
+                    Text(label, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = accent)
                     if (live) estimateDistance(device.rssiEma, device.referenceRssiAt1m)?.let { Text("${it.label} 추정", color = RfColors.textDim) }
                 }
             }
-            Text(if (live) "휴대폰을 들고 천천히 걸어 보세요. 막대가 늘어나는 쪽에 기기가 있습니다." else "지금은 잡히지 않습니다. 다시 나타나면 막대가 올라갑니다.")
+            Text(when {
+                fromWalk && walkRadioReady -> "휴대폰 방향을 유지하고 두세 걸음 움직여 보세요. 수치가 여러 번 연속 오르는 쪽으로 이동하세요."
+                live -> "휴대폰을 들고 천천히 걸어 보세요. 막대가 늘어나는 쪽에 기기가 있습니다."
+                fromWalk -> "선택한 주소의 세기를 지금 비교할 수 없습니다. 같은 주소가 다시 충분히 잡히면 막대가 올라갑니다."
+                else -> "지금은 잡히지 않습니다. 다시 나타나면 막대가 올라갑니다."
+            })
             Surface(color = RfColors.surface, shape = RoundedCornerShape(18.dp)) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("가까울수록 빠른 진동", Modifier.weight(1f))
-                    Switch(checked = geigerOn, enabled = scanning, onCheckedChange = { on -> vm.findTarget.value = if (on) device.trackingKey else null; vm.setGeiger(on) })
+                    Switch(checked = geigerOn, enabled = scanning && (!fromWalk || live || geigerOn), onCheckedChange = { on ->
+                        vm.findTarget.value = if (on) trackingKey else null
+                        vm.setGeiger(on, fromWalk)
+                    })
                 }
             }
             GuardPanel {
@@ -308,7 +339,9 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
             Row(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (flagged) OutlinedButton(onClick = { vm.acknowledge(device.acknowledgeKey); close() }, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = RoundedCornerShape(16.dp)) { Text("확인함\n목록에서 빼기") }
                 Button(onClick = close, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = RfColors.surfaceAlt, contentColor = RfColors.textPrimary)) { Text("목록으로", fontWeight = FontWeight.Bold) }
+                    colors = ButtonDefaults.buttonColors(containerColor = RfColors.surfaceAlt, contentColor = RfColors.textPrimary)) {
+                    Text(if (fromWalk) "둘러보기 결과로" else "목록으로", fontWeight = FontWeight.Bold)
+                }
             }
         }
     }

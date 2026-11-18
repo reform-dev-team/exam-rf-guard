@@ -38,6 +38,7 @@ data class RfObservation(
     val manufacturerIds: Set<Int> = emptySet(),
     val hints: Set<SignalHint> = emptySet(),
     val details: Map<String, String> = emptyMap(),
+    val elapsedRealtimeNanos: Long? = null, // BLE packet time on the same clock as motion sensors
 ) {
     val trackingKey: String get() = radioKey(source, key)
 }
@@ -63,6 +64,8 @@ data class TrackedDevice(
     val hints: Set<SignalHint> = emptySet(),
     /** 기기가 알린 나머지 정보(항목 → 값). 화면 표시용이며 저장하지 않는다. */
     val details: Map<String, String> = emptyMap(),
+    val fineReadings: List<Int> = emptyList(),
+    val fineAtMs: Long = 0L,
 ) {
     val trackingKey: String get() = radioKey(source, key)
 }

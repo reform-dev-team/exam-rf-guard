@@ -10,6 +10,8 @@ class DeviceTracker {
         val manufacturerIds = LinkedHashSet<Int>()
         val hints = LinkedHashSet<SignalHint>()
         val details = LinkedHashMap<String, String>()
+        var fineReadings: List<Int> = emptyList()
+        var fineAtMs = 0L
         var ema: Double? = null
         var tx: Double? = null
         var periods: List<ObservationPeriod> = emptyList()
@@ -38,6 +40,14 @@ class DeviceTracker {
         if (!late) t.details.putAll(obs.details)
         if (!late || t.name == null) obs.name?.takeIf { it.isNotBlank() }?.let { t.name = it }
         if (!late) t.hidden = obs.hidden
+        if (!late && obs.source == ScanSource.BLE) {
+            val r = obs.rssi
+            if (r != null && r in -126..-1) {
+                val recent = if (obs.timestampMs - t.fineAtMs <= 3000) t.fineReadings else emptyList()
+                t.fineReadings = recent.takeLast(11) + r
+                t.fineAtMs = obs.timestampMs
+            } else { t.fineReadings = emptyList() }
+        }
         obs.rssi?.let { r ->
             if (!late) {
                 t.ema = RssiFilter.ema(if (t.periods.size > previousPeriodCount) null else t.ema, r)
@@ -71,7 +81,7 @@ class DeviceTracker {
                 periods = t.periods.toList(),
                 referenceRssiAt1m = t.tx,
                 hints = t.hints.toSet(),
-                details = t.details.toMap(),
+                details = t.details.toMap(), fineReadings = t.fineReadings, fineAtMs = t.fineAtMs,
             )
         }.sortedWith(
             compareBy<TrackedDevice> { it.presence.ordinal }

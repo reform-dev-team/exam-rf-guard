@@ -1,8 +1,10 @@
 package com.classroom.rfdetector
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.os.Build
+import android.os.SystemClock
 import android.provider.Settings
 import androidx.core.location.LocationManagerCompat
 import androidx.lifecycle.ViewModel
@@ -23,6 +25,8 @@ import com.classroom.rfdetector.core.baselineGroupCounts
 import com.classroom.rfdetector.core.baselineSamples
 import com.classroom.rfdetector.core.baselineWifiAddresses
 import com.classroom.rfdetector.core.watchView
+import com.classroom.rfdetector.inspection.flow.WalkCapture
+import com.classroom.rfdetector.inspection.flow.walkSignalUsable
 import com.classroom.rfdetector.scanner.BleScanner
 import com.classroom.rfdetector.scanner.WifiScanner
 import com.classroom.rfdetector.sim.RadioSimulator
@@ -57,6 +61,10 @@ class AppViewModel(private val app: Context) : ViewModel() {
     val tracker = DeviceTracker()
     val geiger = GeigerController(app)
     val ble = BleScanner(app)
+    private val walkCapture = WalkCapture(app)
+    internal val walkUi = walkCapture.ui
+    private val walkPermissions by lazy { requiredPermissions() }
+    private var walkPermissionGranted = false
     val wifi = WifiScanner(app, scope)
     /** 가상 전파. 화면에서는 켤 수 없고 자동 테스트에서만 쓴다. */
     val sim = RadioSimulator()
@@ -89,6 +97,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
     private var problemsCheckedAtMs = 0L
     /** 위치 찾기 대상(trackingKey). 지정하면 근접 진동이 이 기기를 따른다. */
     val findTarget = MutableStateFlow<String?>(null)
+    private var geigerFromWalk = false
     /** 감독관이 "확인함"으로 표시한 묶음(groupKey). 이번 감시 동안만 유지한다. */
     val acknowledged = MutableStateFlow<Set<String>>(emptySet())
     private var pausedAtMs: Long? = null
@@ -161,6 +170,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
             scanSession.value = paused.copy(pauses = paused.pauses + 1,
                 pausedMs = paused.pausedMs + (System.currentTimeMillis() - resumedPauseAtMs!!).coerceAtLeast(0))
         } else {
+            walkCapture.clear()
             acknowledged.value = emptySet()
             tracker.clear()
             _devices.value = emptyList()
@@ -191,8 +201,26 @@ class AppViewModel(private val app: Context) : ViewModel() {
     }
 
     private fun onObservation(obs: RfObservation) {
-        if (scanning.value) tracker.update(obs)
+        if (!scanning.value) return
+        tracker.update(obs)
+        walkCapture.observe(obs)
     }
+
+    internal fun startRoomWalk() {
+        checkExamMode()
+        walkCapture.start(SystemClock.elapsedRealtimeNanos(), walkRadioReady())
+    }
+
+    internal fun markRoomWalk() {
+        checkExamMode()
+        walkCapture.mark(SystemClock.elapsedRealtimeNanos(), walkRadioReady())
+    }
+
+    internal fun leaveRoomWalk() = walkCapture.clear()
+
+    private fun walkRadioReady() = scanning.value && baselineSet.value && !simMode.value &&
+        ble.active && walkPermissionGranted && problems.value.isEmpty() && !silenceMissing.value &&
+        (BuildConfig.DEBUG || !airplaneOff.value)
 
     private fun airplaneModeOff() = Settings.Global.getInt(app.contentResolver, Settings.Global.AIRPLANE_MODE_ON, 0) == 0
 
@@ -201,6 +229,8 @@ class AppViewModel(private val app: Context) : ViewModel() {
         silenceMissing.value = !silent.allowed()
         airplaneOff.value = airplaneModeOff()
         problems.value = radioProblems()
+        walkPermissionGranted = scanning.value && !simMode.value &&
+            walkPermissions.all { app.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
         if (scanning.value && !simMode.value) silent.on()
     }
 
@@ -210,6 +240,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
         if (!scanning.value) return
         refresh()
         scanning.value = false
+        walkCapture.interrupt()
         simJob?.cancel(); simJob = null
         refreshJob?.cancel(); refreshJob = null
         ble.stop()
@@ -262,6 +293,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
 
     /** 빈 교실 기록을 비운다. 다음 시작은 1단계 측정부터다. */
     fun resetBaseline() {
+        walkCapture.clear()
         baselineSnapshot.value = null
         watch.value = WatchView()
         applyBaseline()
@@ -279,8 +311,10 @@ class AppViewModel(private val app: Context) : ViewModel() {
         refresh() // 다음 갱신 주기를 기다리지 않고 목록에서 바로 뺀다.
     }
 
-    fun setGeiger(on: Boolean) {
+    fun setGeiger(on: Boolean, fromWalk: Boolean = false) {
         if (on && !scanning.value) return
+        geigerFromWalk = on && fromWalk
+        geiger.setClass(if (on) findDistance(devices.value) else DistanceClass.UNKNOWN)
         geigerOn.value = on
         if (on) geiger.start() else geiger.stop()
     }
@@ -309,7 +343,6 @@ class AppViewModel(private val app: Context) : ViewModel() {
         _devices.value = list
         val view = if (baselineSet.value) watchView(list, baselineGroups, acknowledged.value, now, baselineWifi, baselineSamples) else WatchView()
         watch.value = view
-        geiger.setClass(list.firstOrNull { it.trackingKey == findTarget.value && it.presence == SignalPresence.RECENT }?.distanceClass ?: DistanceClass.UNKNOWN)
         // 설정 상태 확인은 1초에 한 번이면 충분하다.
         if (now - problemsCheckedAtMs >= 1_000) {
             problemsCheckedAtMs = now
@@ -317,6 +350,16 @@ class AppViewModel(private val app: Context) : ViewModel() {
             // 감시 도중에 블루투스를 켠 경우 바로 받기 시작한다. 오류로 멈춘 탐색은 자동으로 되풀이하지 않는다.
             if (scanning.value && !simMode.value && !ble.active && ble.lastError == null && ble.isUsable()) ble.start(::onObservation)
         }
+        geiger.setClass(findDistance(list))
+        walkCapture.tick(SystemClock.elapsedRealtimeNanos(), walkRadioReady())
+    }
+
+    private fun findDistance(list: List<TrackedDevice>): DistanceClass {
+        val target = findTarget.value ?: return DistanceClass.UNKNOWN
+        val device = list.firstOrNull { it.trackingKey == target && it.presence == SignalPresence.RECENT }
+            ?: return DistanceClass.UNKNOWN
+        if (geigerFromWalk && (!walkRadioReady() || !walkSignalUsable(device))) return DistanceClass.UNKNOWN
+        return device.distanceClass
     }
 
     private fun radioProblems(): List<RadioProblem> = if (simMode.value) emptyList() else listOfNotNull(
