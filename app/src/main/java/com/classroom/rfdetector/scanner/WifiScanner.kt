@@ -60,8 +60,9 @@ class WifiScanner(context: Context, private val scope: CoroutineScope) {
                         val previousTimestamp = observedTimestamps[key]
                         if (previousTimestamp != null && result.timestamp <= previousTimestamp) return@forEach
                         observedTimestamps[key] = result.timestamp
-                        onObs(RfObservation(result.BSSID, ScanSource.WIFI, result.SSID?.takeIf { it.isNotBlank() }, result.level, null,
-                            result.SSID.isNullOrBlank(), now - (elapsed - result.timestamp / 1000), hints = wifiHints(result.SSID), details = details(result)))
+                        val name = visibleSsid(result.SSID)
+                        onObs(RfObservation(result.BSSID, ScanSource.WIFI, name, result.level, null,
+                            name == null, now - (elapsed - result.timestamp / 1000), hints = wifiHints(name), details = details(result)))
                     }
                 } catch (_: SecurityException) {
                     reportError("Wi-Fi 권한을 확인하세요 · 정확한 위치 권한이 필요합니다")
@@ -83,6 +84,10 @@ class WifiScanner(context: Context, private val scope: CoroutineScope) {
             }
         }
     }
+
+    /** 숨김 AP는 SSID가 null, 빈 문자열, "<unknown ssid>", 또는 NUL 문자로만 채워진 채 보고될 수 있다. 이 경우 이름 없음(null)으로 본다. */
+    private fun visibleSsid(ssid: String?): String? =
+        ssid?.takeIf { s -> s.isNotBlank() && s != WifiManager.UNKNOWN_SSID && s.any { it != '\u0000' && !it.isWhitespace() } }
 
     private fun details(result: ScanResult): Map<String, String> {
         val modern = Build.VERSION.SDK_INT >= 30

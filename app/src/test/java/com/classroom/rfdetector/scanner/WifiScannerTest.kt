@@ -57,6 +57,22 @@ class WifiScannerTest {
         assertTrue("Cached result must retain its five-second age, was $ageMs ms", ageMs in 5_000..5_500)
     }
 
+    @Test fun placeholderSsidsAreTreatedAsHidden() {
+        shadowOf(manager).setScanResults(emptyList())
+        scanner.start(onObs = { observations.add(it) })
+        shadowOf(manager).setScanResults(listOf(
+            result("00:11:22:33:44:01", "\u0000\u0000\u0000"),
+            result("00:11:22:33:44:02", "<unknown ssid>"),
+            result("00:11:22:33:44:03", ""),
+        ))
+        complete()
+        assertEquals(3, observations.size)
+        observations.forEach {
+            assertNull(it.name)
+            assertTrue(it.hidden)
+        }
+    }
+
     @Test fun expiredAndFutureScanEntriesAreExcluded() {
         ShadowSystemClock.advanceBy(Duration.ofMinutes(2))
         shadowOf(manager).setScanResults(listOf(result("fresh", "fresh"), result("expired", "expired", 90_001), result("future", "future", -1_000)))
