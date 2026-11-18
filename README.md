@@ -165,7 +165,7 @@ APK는 `app/build/outputs/apk/debug/app-debug.apk`에 생깁니다. 구조와 �
 - [이름 기반 제품 후보의 제품명 출처](docs/DEVICE-NAME-SOURCES.md)
 - [Android BLE 기기 탐색](https://developer.android.com/develop/connectivity/bluetooth/ble/find-ble-devices), [Android Wi-Fi 탐색과 제한](https://developer.android.com/develop/connectivity/wifi/wifi-scan)
 
-앱 아이콘의 캐릭터는 화성시 캐릭터 코리요입니다. 원저작자는 화성시이며 [공공누리 제1유형](https://www.kogl.or.kr/info/licenseType1.do)(출처표시) 조건으로 이용합니다. 아이콘의 3D 그림은 [KoriyoZIP](https://koriyozip.com/ko/)의 3D 스타일 재구성 이미지를 가공한 것으로 화성시의 공식 3D 원본이 아니며, 화성시나 KoriyoZIP이 이 앱을 제작·보증했다는 의미도 아닙니다.
+앱 아이콘은 화성시 캐릭터 코리요를 변형한 것입니다. 원저작자는 화성시이며 [공공누리 제1유형](https://www.kogl.or.kr/info/licenseType1.do)(출처표시) 조건으로 이용합니다.
 
 제품명과 회사명은 관측 결과를 설명하기 위해 사용합니다. 해당 제조사가 이 앱을 인증하거나 보증했다는 의미는 아닙니다.
 
