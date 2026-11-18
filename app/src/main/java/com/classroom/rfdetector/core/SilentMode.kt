@@ -40,14 +40,15 @@ class SilentMode(
         applied = false
         val (filter, policy) = previous ?: return
         if (!allowed()) return
-        previous = null
-        store.edit().clear().apply()
         // Android 15부터는 앱이 켠 방해 금지가 이 앱 전용 모드로 따로 관리되므로, 그 모드만 끄면 된다.
         if (Build.VERSION.SDK_INT >= 35) manager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
         else {
             manager.notificationPolicy = policy
-            manager.setInterruptionFilter(filter)
+            val validFilter = filter.takeIf { it in NotificationManager.INTERRUPTION_FILTER_ALL..NotificationManager.INTERRUPTION_FILTER_ALARMS }
+            manager.setInterruptionFilter(validFilter ?: NotificationManager.INTERRUPTION_FILTER_ALL)
         }
+        previous = null
+        store.edit().clear().apply()
     }
 
     /** 앱이 새로 시작될 때 부른다. 앞서 감시 중에 앱이 종료되어 무음이 남아 있으면 원래대로 되돌린다. */

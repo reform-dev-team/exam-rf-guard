@@ -56,6 +56,21 @@ class SilentModeTest {
         assertEquals(userPolicy.priorityCategories, manager.notificationPolicy.priorityCategories)
     }
 
+    @Test fun invalidSavedFilterIsRestoredAfterAccessReturns() {
+        SilentMode(context).on()
+        val store = context.getSharedPreferences("silent-mode", Context.MODE_PRIVATE)
+        store.edit().putInt("filter", 99).commit()
+        shadowOf(manager).setNotificationPolicyAccessGranted(false)
+        SilentMode(context).restoreLeftover()
+        assertTrue(store.contains("filter"))
+
+        shadowOf(manager).setNotificationPolicyAccessGranted(true)
+        SilentMode(context).restoreLeftover()
+        assertEquals(NotificationManager.INTERRUPTION_FILTER_ALL, manager.currentInterruptionFilter)
+        assertEquals(userPolicy.priorityCategories, manager.notificationPolicy.priorityCategories)
+        assertFalse(store.contains("filter"))
+    }
+
     @Test fun nothingIsChangedWhenThereIsNoLeftover() {
         manager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
         // 사용자가 직접 켠 방해 금지는 건드리지 않는다.
