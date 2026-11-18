@@ -379,13 +379,18 @@ private fun GuideList(vararg items: String, numbered: Boolean = false) {
     }
 }
 
-private fun plainKind(device: TrackedDevice) = plainKind(device.source, device.key, device.displayName, device.hints)
+private fun plainKind(device: TrackedDevice) = plainKind(device.source, device.key, device.displayName, device.hints, device.manufacturerIds)
 
 /** 종류는 기기가 스스로 알린 이름과 광고 데이터에서 읽은 추정이다. */
-private fun plainKind(source: ScanSource, address: String, name: String, hints: Set<SignalHint>): Pair<String, RfSymbol> {
+/**
+ * 화면에 붙이는 종류 이름. 1단계는 기기가 알린 이름, 2단계는 회사 번호([WearableCompanyCatalog])다.
+ * 회사 번호는 다른 단서가 하나도 없어 "종류 모름"이 될 자리에서만 쓴다. 묶고 세는 기준과는 상관없다.
+ */
+internal fun plainKind(source: ScanSource, address: String, name: String, hints: Set<SignalHint>, manufacturerIds: Set<Int>): Pair<String, RfSymbol> {
     val advertised = advertisedName(address, name)
     val audio = if (source == ScanSource.BLE) AudioNameCatalog.match(advertised) else null
     val wearable = if (source == ScanSource.BLE) WearableNameCatalog.match(advertised) else null
+    val company = if (source == ScanSource.BLE) WearableCompanyCatalog.match(manufacturerIds) else null
     val hint = hints.primary
     return when {
         source == ScanSource.WIFI -> (hint?.label ?: if (advertised == null) "이름을 숨긴 와이파이" else "와이파이 · 공유기나 휴대폰 핫스팟") to RfSymbol.WIFI
@@ -395,6 +400,7 @@ private fun plainKind(source: ScanSource, address: String, name: String, hints: 
         wearable?.kind == WearableKind.SMART_GLASSES -> "스마트 안경" to RfSymbol.GLASSES
         wearable?.kind == WearableKind.SMARTWATCH -> "스마트워치" to RfSymbol.WATCH
         wearable?.kind == WearableKind.CAMERA -> "카메라" to RfSymbol.CAMERA
+        hint == null && company != null -> company.label to RfSymbol.GLASSES
         hint == null -> "블루투스 기기 · 종류 모름" to RfSymbol.BLUETOOTH
         hint == SignalHint.GLASSES -> hint.label to RfSymbol.GLASSES
         hint == SignalHint.WATCH -> hint.label to RfSymbol.WATCH
@@ -422,6 +428,10 @@ private fun infoRows(device: TrackedDevice): List<Pair<String, String>> = buildL
     val wifi = device.source == ScanSource.WIFI
     if (device.hints.isNotEmpty()) add("종류 단서" to device.hints.sortedBy { it.ordinal }.joinToString(" / ") { it.label })
     if (device.identity.advertisedCompanies.isNotEmpty()) add("제조사 · 블루투스 회사 코드" to device.identity.advertisedCompanies.joinToString(", "))
+    WearableCompanyCatalog.match(device.manufacturerIds)?.takeIf { device.source == ScanSource.BLE }?.let { company ->
+        add("안경·헤드셋 회사 번호" to "${company.products} · 회사 번호로 찾은 후보")
+        company.sharedWith?.let { add("같은 번호를 쓰는 다른 기기" to it) }
+    }
     add("제조사 · 주소 앞자리" to when {
         isLocallyAdministered(device.key) == true && wifi -> "임의 주소라 조회할 수 없음. 휴대폰 핫스팟이 주로 이런 주소를 씁니다."
         isLocallyAdministered(device.key) == true -> "임의 주소라 조회할 수 없음. 휴대폰과 이어폰은 주소를 주기적으로 바꿉니다."
@@ -493,7 +503,7 @@ private fun LazyListScope.knownRows(group: KnownGroup, open: Boolean, onToggle: 
 private fun KnownCard(group: KnownGroup, open: Boolean, onClick: () -> Unit) {
     val shown = group.live.firstOrNull() ?: group.last
     val sample = group.sample
-    val (kind, symbol) = if (shown != null) plainKind(shown) else plainKind(sample!!.source, sample.address, sample.name, sample.hints)
+    val (kind, symbol) = if (shown != null) plainKind(shown) else plainKind(sample!!.source, sample.address, sample.name, sample.hints, sample.manufacturerIds)
     val (title, subtitle) = if (shown != null) cardLabels(shown)
         else cardLabels(kind, advertisedName(sample!!.address, sample.name), sample.manufacturer.takeUnless { it == "제조사 미확인" }, sample.source == ScanSource.WIFI)
     val live = group.live.isNotEmpty()

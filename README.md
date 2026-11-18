@@ -85,9 +85,103 @@
 
 자세한 설계 배경은 [docs/design/same-device-grouping.md](docs/design/same-device-grouping.md)에 있습니다.
 
+### 스마트 안경·헤드셋을 알아보는 방법
+
+**노리는 것은 시험 중에 AI로 답을 받는 것을 막는 일입니다.** AI 안경이 AI에게 묻고 답을 듣거나, 보는 장면을 실시간으로 보내려면 연결된 휴대폰이 있어야 합니다. 휴대폰 없이 되는 것은 사진·영상 촬영 정도이고, 찍은 것은 안경 안에 저장됐다가 나중에 휴대폰으로 옮겨집니다. 답을 구하지 못하는 안경은 시험에 도움이 되지 않습니다. 수능처럼 시험이 끝나면 문제지를 공개하는 시험에서는 문제를 찍어 가는 것보다 시험 중에 답을 받는 것이 더 큰 위험입니다.
+
+#### 미리 연결해 둔 안경은 이 앱으로 찾지 못합니다
+
+- **Ray-Ban Meta 2세대는 휴대폰과 연결되면 블루투스 알림 신호를 아예 멈춥니다.** Mobile Hacker의 시험에서, 이 앱과 같은 방식으로 안경을 찾는 앱 Nearby Glasses는 연결된 Ray-Ban Meta 2세대 앞에서 아무것도 찾지 못했습니다. 일반 블루투스 스캐너에도 보이지 않았습니다. 보도 원문은 "Meta Ray-Ban Gen 2 stops broadcasting advertisement packets entirely after connecting to a phone, making the device invisible not only to Nearby Glasses but to general-purpose Bluetooth scanners as well"이고, 고장이 아니라 원래 그렇게 설계된 동작이라고 적었습니다([Next Reality](https://virtual.reality.news/news/app-to-detect-meta-glasses-nearby-has-a-critical-blind-spot/)).
+- 이 앱도 기기가 내보내는 알림 신호만 봅니다. 아래 [탐지 범위](#탐지-범위)에도 "연결된 뒤 알림 신호를 멈추는 제품은 연결 전에만 보입니다"라고 적혀 있습니다. 이 저장소의 가상 폰 시험에서도, 안경 신호를 끄자 15초 안에 목록에서 빠졌습니다.
+
+이 근거의 한계는 다음과 같습니다.
+
+- 시험한 것은 Ray-Ban Meta 2세대 한 모델뿐입니다. 1세대, Oakley Meta, Meta Ray-Ban Display, 다른 회사 안경은 다를 수 있습니다.
+- 이 저장소가 한 시험이 아니라 Mobile Hacker의 시험을 Next Reality가 전한 것입니다. 펌웨어 버전과 시험 조건은 기사에 없습니다.
+- 연결이 끊긴 안경이 다시 신호를 내는지는 기사에 없습니다.
+- 이 저장소에는 스마트 안경이 없어 실제 안경으로 확인하지 못했습니다.
+
+그래도 위험은 분명합니다. 수험생이 교실 밖에서 휴대폰과 안경을 미리 연결해 두면, 휴대폰이 안경 가까이에서 켜져 있는 동안 안경은 이 앱에 보이지 않습니다.
+
+#### 해결: 휴대폰을 안경에서 떼어 놓습니다
+
+1. **걷은 휴대폰은 교무실처럼 시험실에서 먼 곳에 보관합니다. 같은 시험실에는 절대 두지 않습니다.** 수험생은 휴대폰을 몰래 켜 둔 채 낼 수 있습니다. 걷은 휴대폰을 같은 교실 앞쪽에 모아 두면, 켜진 휴대폰이 안경과 계속 연결되어 AI 답을 받을 수 있고, 연결된 안경은 이 앱에도 보이지 않습니다. 교무실, 1층, 건물의 가장 바깥처럼 블루투스가 닿지 않는 곳에 두면 미리 연결해 둔 안경도 연결이 끊겨 AI 답을 받을 수도, 실시간으로 보낼 수도 없습니다. 같은 교실에 두면 켜 둔 휴대폰이 시험 중 새 전파로 잡혀, 걷은 휴대폰과 내지 않은 휴대폰을 구분할 수 없습니다. 2번 안내는 걷은 휴대폰이 교실 밖에 있어야 성립합니다.
+2. **내지 않은 휴대폰은 위반으로 봅니다.** 안경으로 답을 받으려면 휴대폰을 몸에 숨겨야 합니다. 시험 중 교실에서 휴대폰 신호(켜져 있는 Apple 기기, 휴대폰 핫스팟 등)가 잡히면 내지 않은 휴대폰으로 보고 확인합니다. 다만 휴대폰은 종류와 설정에 따라 알림 신호를 내지 않을 수 있어, 숨긴 휴대폰을 모두 찾지는 못합니다.
+3. **이 앱으로 남은 신호를 찾습니다.** 휴대폰과 끊긴 안경이 회사 번호를 담아 다시 신호를 내면 "스마트 안경·헤드셋 후보"로 뜹니다. 끊긴 안경이 다시 신호를 내는지는 아직 확인한 자료가 없습니다. 그래도 1번과 2번으로 AI 답 받기는 막힙니다.
+
+휴대폰 없이도 사진·영상 촬영은 됩니다. 수능처럼 시험 뒤 문제지를 공개하는 시험에서는 이 정도로 충분하다고 봅니다. 문제지를 공개하지 않는 시험에서는 입실할 때 안경을 확인하는 절차가 더 필요합니다([제도 제안](docs/POLICY-PROPOSALS.ko.md)).
+
+#### 작동 원리
+
+블루투스 기기는 주변에 "여기 있다"는 짧은 알림 신호를 반복해서 내보냅니다. 휴대폰과 연결되기 전이나 연결이 끊긴 뒤에 특히 그렇습니다. 이 신호에는 기기가 정해 넣는 값이 몇 가지 들어 있습니다.
+
+| 신호에 든 값 | 예 | 바꾸기 |
+| --- | --- | --- |
+| 이름 | `Ray-Ban Meta` | 설정에서 바꾸거나 지울 수 있습니다. |
+| 회사 번호 | `0x0D53`(Luxottica). Bluetooth SIG가 회사마다 나눠 준 번호로, 제조사 데이터 맨 앞 두 바이트에 들어 있습니다. | 기기 프로그램이 넣는 값이라 설정으로는 바꿀 수 없습니다. |
+| 표준 종류 번호 | 안경 분류(0x07) | 기기가 넣을 때만 있습니다. 실제 안경이 넣는지는 확인하지 못했습니다. |
+
+앱은 먼저 빈 교실 기록과 비교해 늘어난 신호를 "새 전파"로 알립니다. 그다음 새 전파에 종류 이름을 붙입니다.
+
+1. **1단계 — 이름.** "Ray-Ban Meta", "Oakley Meta" 같은 이름이면 "스마트 안경"으로 표시합니다. 부정행위를 하려는 사람은 이름을 지울 수 있으므로, 이름은 기본 이름을 그대로 둔 기기만 잡습니다.
+2. **2단계 — 회사 번호.** 이름도 다른 종류 단서도 없어 "종류 모름"이 될 신호에서 회사 번호를 아래 목록과 맞춰 보고, 있으면 "스마트 안경·헤드셋 후보"로 표시합니다. 예: 이름을 지운 레이밴 메타 → "스마트 안경·헤드셋 후보 · Luxottica Group S.p.A". 칩 회사 번호(Jieli)는 "무선 이어폰·스마트 안경 후보"로 표시합니다.
+3. 기기가 표준 종류 번호로 안경이라고 알리면 "스마트 안경"으로 표시합니다.
+
+이 목록은 화면에 붙는 종류 이름만 바꿉니다. 무엇을 새 전파로 세는지는 바꾸지 않습니다. 자동 테스트가 목록의 번호마다 목록에 없는 번호와 똑같이 묶이고 똑같이 세는지 확인합니다.
+
+회사 번호는 그 회사가 만든 신호라는 뜻일 뿐 제품을 증명하지 않습니다. 예를 들어 Meta 번호는 Quest 헤드셋도 씁니다. 시험장에서는 둘 다 반입할 수 없으므로 함께 "후보"로 묶습니다. 칩 회사 번호도 같습니다. Jieli 칩은 값싼 카메라 안경보다 값싼 이어폰에 더 흔하므로, 감독관이 안경만 보지 않고 귀도 보도록 제목을 "무선 이어폰·스마트 안경 후보"로 합니다. 이어폰도 시험장에 반입할 수 없으므로 후보에서 빼지 않습니다. 휴대폰·이어폰·노트북과 번호를 같이 쓰는 회사(Apple, 삼성, 구글, 마이크로소프트, 소니)는 넣지 않습니다. 숨긴 휴대폰이 "안경 후보"로 뜨면 엉뚱한 곳을 찾게 되기 때문입니다. 이 회사들의 신호도 빈 교실 기록에 없으면 새 전파로 그대로 알립니다.
+
+#### 회사 번호 목록 — 지금까지 찾은 것
+
+빠진 회사가 많을 것입니다. 계속 추가할 수 있게 만들었습니다.
+
+| 회사 번호 | 공식 회사 이름 | 찾으려는 제품 | 같은 번호를 쓰는 다른 기기 | 근거 |
+| --- | --- | --- | --- | --- |
+| 0x0D53 | Luxottica Group S.p.A | Ray-Ban Meta·Oakley Meta 안경 | 알려진 것 없음 | 공개 앱 두 곳 |
+| 0x01AB | Meta Platforms, Inc. | Meta 안경·Quest 헤드셋 | Portal 화상통화 기기 | 공개 앱 두 곳 |
+| 0x058E | Meta Platforms Technologies, LLC | Meta 안경·Quest 헤드셋 | 알려진 것 없음 | 공개 앱 두 곳 |
+| 0x03C2 | Snapchat Inc | Snap Spectacles 안경 | 알려진 것 없음 | 공개 앱 두 곳 |
+| 0x05D6 | Zhuhai Jieli technology Co.,Ltd | 값싼 카메라 안경(Rogbird VisionPro·Rollme VistaView 등) | 이 회사 칩을 쓰는 값싼 이어폰·스피커 | 공개 앱 한 곳 |
+| 0x060C | Vuzix Corporation | Vuzix 안경 | 알려진 것 없음 | 등록부에 회사만 확인 |
+| 0x10F9 | Even Realities Ltd. | Even Realities 안경 | 알려진 것 없음 | 등록부에 회사만 확인 |
+| 0x055D | Valve Corporation | Valve Index 헤드셋 | 알려진 것 없음 | 등록부에 회사만 확인 |
+| 0x02ED | HTC Corporation | HTC Vive 헤드셋 | 알려진 것 없음 | 등록부에 회사만 확인 |
+
+읽는 법: "공개 앱"은 이 번호로 실제 제품을 찾는다고 공개한 앱([Nearby Glasses](https://github.com/yjeanrenaud/yj_nearbyglasses), [NoPeek](https://github.com/getnopeek/nopeek-android))입니다. "등록부에 회사만 확인"은 회사 번호는 공식 등록부에 있지만, 그 회사 제품이 이 번호를 신호에 싣는다는 자료는 찾지 못했다는 뜻입니다. 이 목록의 어느 줄도 이 저장소에서 실제 기기로 확인하지 않았습니다.
+
+#### 한 줄 추가하는 법
+
+1. [WearableCompanyCatalog.kt](app/src/main/java/com/classroom/rfdetector/core/WearableCompanyCatalog.kt)의 `entries`에 한 줄을 넣습니다.
+
+   ```kotlin
+   WearableCompany(0x0D53, "Luxottica Group S.p.A", "Ray-Ban Meta·Oakley Meta 안경", null, "근거 링크"),
+   ```
+
+   순서대로 회사 번호, 공식 회사 이름, 찾으려는 제품, 같은 번호를 쓰는 다른 기기(없으면 `null`), 근거(실제 제품 확인 자료가 없으면 `null`)입니다.
+
+   안경보다 다른 기기가 더 흔한 번호는 끝에 `label = "무선 이어폰·스마트 안경 후보"`처럼 목록 제목을 따로 적습니다. 안 적으면 "스마트 안경·헤드셋 후보"입니다. 제목은 "후보"로 끝나야 하고, 아니면 테스트가 실패합니다.
+
+   목록을 코드 파일에 둔 이유: 화면이 종류를 정하는 자리에서 앱이 켜지자마자 바로 쓸 수 있고, 따옴표나 쉼표를 빠뜨리면 빌드가 멈춰 바로 알 수 있습니다. 표 파일로 두면 앱이 켜질 때 읽어 화면까지 넘기는 코드가 따로 필요하고, 칸을 잘못 나눈 줄은 아무 경고 없이 빠질 수 있습니다.
+2. 회사 이름은 [bluetooth-companies.tsv](app/src/main/assets/bluetooth-companies.tsv)에서 번호로 찾아 **한 글자도 바꾸지 말고** 그대로 씁니다. 이 파일의 번호는 10진수입니다(0x0D53 = 3411). 이름이 다르면 테스트가 실패합니다. 다른 앱의 목록을 옮길 때 특히 확인하세요. 예: 한 공개 앱에 VR 헤드셋 회사(Pico) 번호로 적힌 0x0BA7은 공식 등록부에서는 청각 기기 회사(hearX) 번호입니다.
+3. 화면에 어떻게 떠야 하는지 [WearableKindCasesTest.kt](app/src/test/java/com/classroom/rfdetector/ui/WearableKindCasesTest.kt)에 사례를 한 줄 추가하면, 그 사례가 그대로 시험됩니다.
+4. `./gradlew testDebugUnitTest`로 확인하고 PR을 보냅니다. 실제 기기에서 그 번호를 봤다면 기기 모델과 화면을 PR에 함께 적어 주세요.
+
+#### 한계
+
+- 미리 연결해 둔 안경은 찾지 못합니다. 근거와 해결은 위 [미리 연결해 둔 안경](#미리-연결해-둔-안경은-이-앱으로-찾지-못합니다) 절에 있습니다.
+- "스마트 안경·헤드셋 후보" 같은 후보 표시가 뜨지 않았다고 안경이 아닌 것은 아닙니다. XREAL, Rokid, Brilliant Labs처럼 공식 등록부에 회사 번호가 없는 안경 회사가 있고, 칩 회사의 번호를 쓰거나 회사 번호를 싣지 않는 안경도 있을 수 있습니다. 이런 안경도 빈 교실 기록에 없던 신호면 새 전파로 뜹니다. 표시와 관계없이 새 전파는 모두 확인하고, 위치 찾기로 다가갔을 때 안경을 쓴 수험생 쪽에서 세지면 안경을 확인하세요.
+- 이름 없는 신호는 회사 번호로 묶어 셉니다. 빈 교실을 잴 때 같은 회사 번호의 기기(예: 감독관의 Meta 기기)가 있었다면, 안경이 들어와도 그 묶음의 개수가 늘어난 상태가 30초 넘게 이어져야 알립니다. 감독관 기기가 나가고 안경이 들어오는 식으로 맞바뀌면 구분하지 못합니다. 빈 교실을 잴 때는 감독관 기기도 꺼 두세요.
+- 회사 번호를 흉내 내는 장치는 만들 수 있습니다. 표시는 후보일 뿐 증거가 아닙니다.
+- 이 앱이 막지 못하는 것을 법·표준·시험 규정으로 막는 방법은 [docs/POLICY-PROPOSALS.ko.md](docs/POLICY-PROPOSALS.ko.md)에 따로 정리했습니다.
+
 ## 탐지 범위
 
 앱이 보는 것은 기기가 주변에 내보내는 **알림 신호**뿐입니다. 이미 연결된 기기끼리 주고받는 통신은 보지 못합니다.
+
+그래서 다음 두 가지를 함께 지켜야 합니다. 자세한 내용은 [휴대폰을 안경에서 떼어 놓습니다](#해결-휴대폰을-안경에서-떼어-놓습니다)에 있습니다.
+
+- **걷은 휴대폰은 교실 밖, 블루투스가 닿지 않는 곳에 둡니다.**
+- **시험 중 새로 잡힌 휴대폰 신호는 내지 않은 휴대폰으로 보고 확인합니다.**
 
 | 구분 | 예 |
 | --- | --- |
@@ -163,6 +257,9 @@ APK는 `app/build/outputs/apk/debug/app-debug.apk`에 생깁니다. 구조와 �
 - [Bluetooth SIG 회사 식별자](https://www.bluetooth.com/specifications/assigned-numbers/)
 - [앱에 포함한 등록부의 출처와 보관 필드](app/src/main/assets/REGISTRY-SOURCES.txt)
 - [이름 기반 제품 후보의 제품명 출처](docs/DEVICE-NAME-SOURCES.md)
+- 안경·헤드셋 회사 번호: [Nearby Glasses](https://github.com/yjeanrenaud/yj_nearbyglasses)(AGPL-3.0, 코드는 가져오지 않고 번호만 공식 등록부와 대조), [NoPeek](https://github.com/getnopeek/nopeek-android)(MIT, 같은 방식)
+- 연결된 안경이 신호를 멈춘다는 시험 보고: [Next Reality](https://virtual.reality.news/news/app-to-detect-meta-glasses-nearby-has-a-critical-blind-spot/)(시험: Mobile Hacker, Ray-Ban Meta 2세대)
+- 휴대폰 없이 촬영한 사진·영상이 안경에 저장되는 방식: [Meta 도움말](https://www.meta.com/help/ai-glasses/1427588664906909/)
 - [Android BLE 기기 탐색](https://developer.android.com/develop/connectivity/bluetooth/ble/find-ble-devices), [Android Wi-Fi 탐색과 제한](https://developer.android.com/develop/connectivity/wifi/wifi-scan)
 
 앱 아이콘은 화성시 캐릭터 코리요를 변형한 것입니다. 원저작자는 화성시이며 [공공누리 제1유형](https://www.kogl.or.kr/info/licenseType1.do)(출처표시) 조건으로 이용합니다.
@@ -180,6 +277,8 @@ APK는 `app/build/outputs/apk/debug/app-debug.apk`에 생깁니다. 구조와 �
 KoriyoSCAN is an Android app for exam proctors. It records the Wi-Fi access points and Bluetooth Low Energy advertisements present in an empty room, then flags signals that were not in that record once the exam is under way, and helps walk toward one by signal strength.
 
 It cannot detect every device. It only sees Wi-Fi access points and BLE advertisements, so it misses devices that use cellular data only, wired or record-only cameras, Bluetooth Classic devices, and anything that stops advertising once connected. It does not block signals and does not decide whether anyone cheated. Field accuracy has not been measured.
+
+Unnamed BLE signals that carry a listed Bluetooth company ID (Luxottica, Meta, Snap and others) are labelled as smart glasses or headset candidates. A chip vendor ID (Jieli) is labelled as an earphone or smart glasses candidate, because cheap earphones use that chip more often; earphones are banned in exam rooms too. This only changes the label; what counts as a new signal is unchanged. The list is one line per company in [WearableCompanyCatalog.kt](app/src/main/java/com/classroom/rfdetector/core/WearableCompanyCatalog.kt), and tests check every entry against the bundled Bluetooth SIG registry.
 
 Records stay on the phone; the app declares no internet permission. The UI and the rest of this document are in Korean. Licensed under Apache-2.0; see [NOTICE](NOTICE) for the icon and bundled registry data.
 

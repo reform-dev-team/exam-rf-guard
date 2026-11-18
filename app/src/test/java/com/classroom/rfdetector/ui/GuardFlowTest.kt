@@ -75,6 +75,24 @@ class GuardFlowTest {
         } finally { vm.shutdown() }
     }
 
+    /** 이름을 지우고 회사 번호 0x0D53(Luxottica)만 싣는 안경. 새 전파 개수는 이어폰과 똑같이 1개이고 종류 이름만 다르다. */
+    @Test fun unnamedGlassesShowAsCandidateByCompanyNumber() {
+        val vm = launch()
+        try {
+            recordEmptyRoom(vm)
+            compose.runOnIdle { vm.simAddGlasses(); shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1)) }
+            waitForText("새 전파 1개 발견")
+            // 카드 아래 줄은 "Luxottica Group S.p.A · 10:31부터"처럼 처음 잡힌 시각이 붙는다.
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("Luxottica Group S.p.A", substring = true).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("스마트 안경·헤드셋 후보").assertIsDisplayed()
+            saveScreen("guard-glasses-found")
+            compose.onNodeWithText("스마트 안경·헤드셋 후보").performClick()
+            compose.onNodeWithText("안경·헤드셋 회사 번호").assertExists()
+            compose.onNodeWithText("Ray-Ban Meta·Oakley Meta 안경 · 회사 번호로 찾은 후보").assertExists()
+            saveScreen("guard-glasses-find")
+        } finally { vm.shutdown() }
+    }
+
     @Test fun backDuringMeasuringOrWatchingAsksBeforeStopping() {
         val vm = launch()
         try {

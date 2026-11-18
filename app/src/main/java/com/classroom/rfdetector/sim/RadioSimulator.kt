@@ -21,6 +21,8 @@ class RadioSimulator {
         var x: Double,
         var y: Double,
         val txDbm: Double = -59.0,
+        /** 비어 있으면 key로 정한 기본값을 쓴다. */
+        val manufacturerIds: Set<Int> = emptySet(),
     )
 
     val devices = mutableListOf(
@@ -42,6 +44,12 @@ class RadioSimulator {
         devices.add(VDev("sim-extra-$index", "AirPods Pro · 추가 가상 $index", ScanSource.BLE, false, 1.0, 1.0))
     }
 
+    /** 이름을 알리지 않고 회사 번호 0x0D53(Luxottica)만 싣는 안경. 레이밴 메타가 이름을 지운 경우를 흉내 낸다. */
+    fun addGlasses() {
+        val index = devices.count { it.key.startsWith("sim-extra-glasses-") } + 1
+        devices.add(VDev("sim-extra-glasses-$index", "", ScanSource.BLE, false, 0.8, 1.2, manufacturerIds = setOf(0x0D53)))
+    }
+
     /** 4Hz 정도로 호출: 원점 기준 관측값 생성 */
     fun tick(): List<RfObservation> {
         val now = System.currentTimeMillis()
@@ -52,12 +60,13 @@ class RadioSimulator {
             RfObservation(
                 key = d.key,
                 source = d.source,
-                name = d.name.takeIf { !d.hidden },
+                name = d.name.takeIf { !d.hidden && it.isNotEmpty() },
                 rssi = rssi.toInt(),
                 txPower = null,
                 hidden = d.hidden,
                 timestampMs = now,
                 manufacturerIds = when {
+                    d.manufacturerIds.isNotEmpty() -> d.manufacturerIds
                     d.key == "sim-airpods" || d.key.startsWith("sim-extra-") -> setOf(76)
                     d.key == "sim-buds" -> setOf(117)
                     else -> emptySet()

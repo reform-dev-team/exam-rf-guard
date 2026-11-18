@@ -41,6 +41,7 @@ sdk.dir=C:/Android/Sdk
 | `core/SignalSnapshot`, `SnapshotStore` | 빈 교실 기록과 그 JSON 저장 |
 | `core/SignalHints`, `SignalDetails` | 알림 신호에서 종류 단서와 부가 정보 읽기 |
 | `core/DeviceIdentity`, `AudioNameCatalog`, `WearableNameCatalog` | 회사 코드·주소 등록부·이름 규칙으로 제조사와 제품군 후보 찾기 |
+| `core/WearableCompanyCatalog` | 회사 번호로 찾는 스마트 안경·헤드셋 후보 목록. 화면의 종류 이름만 바꾸고 묶음 판정에는 쓰지 않습니다. |
 | `core/RssiFilter`, `DistanceEstimate` | 수신 세기 평활, 가정에 기반한 거리 어림 |
 | `core/Geiger`, `SilentMode` | 위치 찾기 진동, 측정·감시 중 방해 금지 |
 | `sim/RadioSimulator` | 가상 전파. 화면에서는 켤 수 없고 자동 테스트만 씁니다. |
@@ -73,7 +74,7 @@ BLE 알림 신호의 송신 출력 값은 1m 기준 수신 세기가 아니므�
 
 ## 검증 범위
 
-자동 테스트는 묶음 판정, 추적, 저장, 식별, 스캐너 콜백, 감독관 화면 흐름(가상 전파)을 다룹니다. 다음은 자동 테스트가 대신하지 못합니다.
+자동 테스트는 묶음 판정, 추적, 저장, 식별, 스캐너 콜백, 감독관 화면 흐름(가상 전파)을 다룹니다. 안경·헤드셋 회사 번호 목록은 공식 등록부와의 대조, 화면 표시 사례, 목록이 세는 개수를 바꾸지 않는지를 따로 확인합니다. 다음은 자동 테스트가 대신하지 못합니다.
 
 - 실제 무선 환경에서의 수신률과 누락률
 - 기종·Android 버전별 권한 화면과 시스템의 탐색 제한

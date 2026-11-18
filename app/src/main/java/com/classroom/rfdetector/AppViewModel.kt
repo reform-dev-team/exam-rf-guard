@@ -300,6 +300,10 @@ class AppViewModel(private val app: Context) : ViewModel() {
         if (scanning.value && simMode.value) sim.addDevice()
     }
 
+    fun simAddGlasses() {
+        if (scanning.value && simMode.value) sim.addGlasses()
+    }
+
     private fun refresh() {
         val now = System.currentTimeMillis()
         healthTick.value = now
