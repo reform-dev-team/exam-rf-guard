@@ -12,7 +12,7 @@ import kotlin.math.max
  * 실제 스캐너와 동일한 관측 형식(RfObservation)을 만들어 같은 파이프라인을 탄다.
  * 좌표계: 북=+y, 동=+x. 사용자는 원점에 있다.
  */
-class RadioSimulator {
+class RadioSimulator(private val rnd: Random = Random()) {
     class VDev(
         val key: String,
         val name: String,
@@ -31,7 +31,6 @@ class RadioSimulator {
         VDev("sim-hidden", "(이름 없는 AP · 가상)", ScanSource.WIFI, true, x = -4.6, y = -3.2),
     )
 
-    private val rnd = Random()
 
     fun reset() {
         devices.removeAll { it.key.startsWith("sim-extra-") }
@@ -43,8 +42,7 @@ class RadioSimulator {
     }
 
     /** 4Hz 정도로 호출: 원점 기준 관측값 생성 */
-    fun tick(): List<RfObservation> {
-        val now = System.currentTimeMillis()
+    fun tick(now: Long = System.currentTimeMillis()): List<RfObservation> {
         return devices.map { d ->
             val dist = max(0.4, hypot(d.x, d.y))
             var rssi = d.txDbm - 10 * 2.7 * log10(dist) + rnd.nextGaussian() * 3.2

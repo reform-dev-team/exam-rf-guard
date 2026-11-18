@@ -60,6 +60,8 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
     val tick by vm.healthTick.collectAsState()
     val watch by vm.watch.collectAsState()
     val problems by vm.problems.collectAsState()
+    val bleHealth by vm.bleHealth.collectAsState()
+    val wifiHealth by vm.wifiHealth.collectAsState()
     val silenceMissing by vm.silenceMissing.collectAsState()
     val airplaneOff by vm.airplaneOff.collectAsState()
     var openGroup by remember { mutableStateOf<String?>(null) }
@@ -141,6 +143,7 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                         }
                     }
                     problemItems(problems)
+                    item { ScanHealthPanel(bleHealth, wifiHealth) }
                     examModeItems(airplaneOff && !simulation, silenceMissing && !simulation)
                     item {
                         GuardPanel {
@@ -154,27 +157,30 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                     val watching = phase == GuardPhase.WATCH
                     val found = watch.count > 0
                     item {
-                        val incomplete = watching && problems.isNotEmpty()
-                        Surface(color = if (!watching || incomplete) RfColors.surfaceAlt else if (found) warnDim else okDim, shape = RoundedCornerShape(20.dp)) {
+                        val incomplete = watching && (problems.isNotEmpty() || listOf(bleHealth, wifiHealth).any { it.state == ScanState.ERROR || it.state == ScanState.STOPPED })
+                        val waiting = watching && listOf(bleHealth, wifiHealth).any { it.state == ScanState.WAITING }
+                        Surface(color = if (!watching) RfColors.surfaceAlt else if (found) warnDim else if (incomplete || waiting) RfColors.surfaceAlt else okDim, shape = RoundedCornerShape(20.dp)) {
                             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                                    val accent = if (!watching) RfColors.textDim else if (found || incomplete) RfColors.warning else RfColors.ok
+                                    val accent = if (!watching) RfColors.textDim else if (found || incomplete || waiting) RfColors.warning else RfColors.ok
                                     Box(Modifier.size(48.dp).background(accent, CircleShape), contentAlignment = Alignment.Center) {
                                         if (watching && found) Text("${watch.count}", color = RfColors.bg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
-                                        else if (incomplete) Text("!", color = RfColors.bg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
+                                        else if (incomplete || waiting) Text("!", color = RfColors.bg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
                                         else RfGlyph(RfSymbol.CHECK, size = 28.dp, color = RfColors.bg)
                                     }
                                     Text(when {
                                         !watching -> "감시를 끝냈습니다"
-                                        found -> "새 전파 ${watch.count}개 발견"
+                                        found -> "새 신호 ${watch.count}개"
                                         incomplete -> "감시가 완전하지 않습니다"
+                                        waiting -> "수신을 기다리는 중입니다"
                                         else -> "새 전파 없음"
                                     }, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = if (watching) accent else RfColors.textPrimary)
                                 }
                                 Text(if (watching) "감시 중 · ${minSec(elapsed)} 경과" else "지금은 전파를 받지 않습니다")
                                 if (watching) Text(when {
+                                    incomplete -> "수신 상태와 설정을 확인하세요. 전파가 있어도 표시되지 않을 수 있습니다."
+                                    waiting -> "아직 수신을 확인하지 못했습니다. 주변이 조용할 수도 있습니다."
                                     found -> "빈 교실에 없던 전파가 지금 잡히고 있습니다. 줄을 눌러 다가가며 세기를 확인하세요. 사라지면 목록에서 빠집니다."
-                                    incomplete -> "아래 문제를 해결하기 전까지는 전파가 있어도 표시되지 않을 수 있습니다."
                                     else -> "지금 잡히는 전파는 모두 빈 교실 기록에 있던 것입니다."
                                 }, color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
                             }
@@ -184,12 +190,13 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                     if (watching) {
                         item { Text("이 화면이 켜져 있는 동안에만 감시합니다. 화면은 자동으로 꺼지지 않으니 전원 버튼을 누르거나 다른 앱으로 가지 마세요. 충전기를 꽂아 두면 좋습니다.${if (silenceMissing || simulation) "" else " 감시 중에는 전화·알림·알람이 울리지 않게 휴대폰을 무음으로 바꿔 둡니다."}", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall) }
                         problemItems(problems)
+                        item { ScanHealthPanel(bleHealth, wifiHealth) }
                         session?.takeIf { it.pauses > 0 }?.let {
                             item { GuardNotice("앱을 벗어나 있던 시간이 있습니다", "${it.pauses}회, 총 ${minSec((it.pausedMs / 1000).toInt())} 동안은 전파를 받지 못했습니다. 화면을 끄거나 다른 앱을 쓰는 동안에는 감시가 멈추고, 돌아오면 자동으로 이어집니다.") }
                         }
-                        item { GuardSectionTitle(RfSymbol.WIFI, "와이파이", if (watch.wifi.isEmpty()) "빈 교실에 없던 와이파이 없음" else "빈 교실에 없던 와이파이 ${watch.wifi.size}개") }
+                        item { GuardSectionTitle(RfSymbol.WIFI, "와이파이", if (watch.wifi.isNotEmpty()) "빈 교실에 없던 와이파이 ${watch.wifi.size}개" else if (wifiHealth.state != ScanState.COMPLETED) "수신 상태 확인 필요" else "빈 교실에 없던 와이파이 없음") }
                         watch.wifi.forEach { group -> groupRows(group, openGroup == group.key, { toggle(group.key) }, onFind) }
-                        item { GuardSectionTitle(RfSymbol.BLUETOOTH, "블루투스", if (watch.bluetooth.isEmpty()) "빈 교실 때보다 늘어난 기기 없음" else "빈 교실 때보다 늘어난 기기 ${watch.bluetooth.size}종") }
+                        item { GuardSectionTitle(RfSymbol.BLUETOOTH, "블루투스", if (watch.bluetooth.isNotEmpty()) "빈 교실 때보다 늘어난 기기 ${watch.bluetooth.size}종" else if (bleHealth.state != ScanState.RECEIVING) "수신 상태 확인 필요" else "빈 교실 때보다 늘어난 기기 없음") }
                         watch.bluetooth.forEach { group -> groupRows(group, openGroup == group.key, { toggle(group.key) }, onFind) }
                         if (watch.far.isNotEmpty()) item { FoldRow("멀리서 약하게 잡히는 것 ${watch.far.size}종", farOpen) { farOpen = !farOpen } }
                         if (farOpen) watch.far.forEach { group -> groupRows(group, openGroup == group.key, { toggle(group.key) }, onFind) }

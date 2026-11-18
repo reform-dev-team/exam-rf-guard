@@ -8,6 +8,7 @@ import android.os.SystemClock
 import com.classroom.rfdetector.core.DeviceTracker
 import com.classroom.rfdetector.core.DistanceClass
 import com.classroom.rfdetector.core.RfObservation
+import com.classroom.rfdetector.core.ScanState
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -25,6 +26,29 @@ import java.time.Duration
 @Config(sdk = [34])
 class BleScannerTest {
     @Before fun clockHasStarted() { ShadowSystemClock.advanceBy(Duration.ofSeconds(1)) }
+
+    @Test fun healthTracksQuietReceptionFailureStopAndRestart() {
+        val context = RuntimeEnvironment.getApplication()
+        val adapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
+        shadowOf(adapter).setEnabled(true)
+        val scanner = BleScanner(context)
+        assertEquals(ScanState.STOPPED, scanner.health(System.currentTimeMillis()).state)
+        assertTrue(scanner.start { })
+        val callback = shadowOf(adapter.bluetoothLeScanner).scanCallbacks.single()
+        assertEquals(ScanState.WAITING, scanner.health(System.currentTimeMillis()).state)
+        callback.onScanResult(1, ScanResult(adapter.getRemoteDevice("00:11:22:33:44:55"), null, -60, SystemClock.elapsedRealtimeNanos()))
+        val received = scanner.lastReceivedAtMs!!
+        assertEquals(ScanState.RECEIVING, scanner.health(received).state)
+        assertEquals(ScanState.WAITING, scanner.health(received + 15_001).state)
+        callback.onScanFailed(2)
+        assertEquals(ScanState.ERROR, scanner.health(received).state)
+        assertTrue(shadowOf(adapter.bluetoothLeScanner).scanCallbacks.isEmpty())
+        scanner.stop()
+        assertEquals(ScanState.STOPPED, scanner.health(received).state)
+        assertTrue(scanner.start { })
+        assertEquals(ScanState.WAITING, scanner.health(received).state)
+        scanner.stop()
+    }
 
     @Test fun advertisementPreservesCompanyAndNameWithoutTreatingRadiatedPowerAsCalibration() {
         val context = RuntimeEnvironment.getApplication()
@@ -140,6 +164,7 @@ class BleScannerTest {
         assertFalse(scanner.start { fail("Disabled bluetooth cannot receive") })
         assertFalse(scanner.active)
         assertNotNull(scanner.lastError)
+        assertEquals(ScanState.ERROR, scanner.health(System.currentTimeMillis()).state)
         assertNull(scanner.lastReceivedAtMs)
     }
 

@@ -14,6 +14,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import com.classroom.rfdetector.App
 import com.classroom.rfdetector.AppViewModel
+import com.classroom.rfdetector.core.ScanHealth
+import com.classroom.rfdetector.core.ScanState
+import com.classroom.rfdetector.core.WatchView
 import java.io.File
 import java.time.Duration
 import org.junit.Assert.assertEquals
@@ -48,7 +51,7 @@ class GuardFlowTest {
 
     private fun addEarbuds(vm: AppViewModel) {
         compose.runOnIdle { vm.simAddDevice(); shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1)) }
-        waitForText("새 전파 1개 발견")
+        waitForText("새 신호 1개")
     }
 
     @Test fun proctorRecordsEmptyRoomThenSeesAndLocatesNewSignal() {
@@ -105,7 +108,7 @@ class GuardFlowTest {
             compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
             compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
             compose.onNodeWithText("감시 끝내기").assertIsDisplayed()
-            compose.onNodeWithText("새 전파 1개 발견").assertExists()
+            compose.onNodeWithText("새 신호 1개").assertExists()
             compose.onNodeWithText("앱을 벗어나 있던 시간이 있습니다").assertExists()
 
             compose.onNodeWithText("무선 이어폰").performClick()
@@ -133,6 +136,71 @@ class GuardFlowTest {
             compose.onNodeWithText("확인함\n목록에서 빼기").assertDoesNotExist()
             compose.onNodeWithText("목록으로").performClick()
             compose.onNodeWithText("감시 끝내기").assertIsDisplayed()
+        } finally { vm.shutdown() }
+    }
+
+    @Test fun newSignalsTakePriorityWhileScannerProblemsRemainVisible() {
+        val vm = launch()
+        try {
+            recordEmptyRoom(vm)
+            addEarbuds(vm)
+            compose.runOnIdle {
+                vm.stopScan()
+                vm.scanning.value = true
+                vm.bleHealth.value = ScanHealth(ScanState.ERROR, "BLE 오류")
+                vm.wifiHealth.value = ScanHealth(ScanState.COMPLETED, "와이파이 탐색 완료")
+            }
+            compose.onNodeWithText("새 신호 1개").assertIsDisplayed()
+            compose.onNodeWithText("1").assertIsDisplayed()
+            compose.onNodeWithText("수신 상태와 설정을 확인하세요. 전파가 있어도 표시되지 않을 수 있습니다.").assertExists()
+            saveScreen("health-found-error")
+            compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("블루투스 · BLE 오류"))
+            compose.onNodeWithText("블루투스 · BLE 오류").assertExists()
+            compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("무선 이어폰"))
+            compose.onNodeWithText("무선 이어폰").assertExists()
+            compose.runOnIdle { vm.bleHealth.value = ScanHealth(ScanState.STOPPED, "수신 중지") }
+            compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("새 신호 1개"))
+            compose.onNodeWithText("새 신호 1개").assertExists()
+            compose.runOnIdle { vm.bleHealth.value = ScanHealth(ScanState.WAITING, "첫 신호를 기다리는 중") }
+            compose.onNodeWithText("새 신호 1개").assertIsDisplayed()
+            compose.onNodeWithText("1").assertIsDisplayed()
+            compose.onNodeWithText("아직 수신을 확인하지 못했습니다. 주변이 조용할 수도 있습니다.").assertExists()
+            saveScreen("health-found-waiting")
+            compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("블루투스 · 첫 신호를 기다리는 중"))
+            compose.onNodeWithText("블루투스 · 첫 신호를 기다리는 중").assertExists()
+            compose.runOnIdle { vm.watch.value = WatchView() }
+            compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("수신을 기다리는 중입니다"))
+            compose.onNodeWithText("수신을 기다리는 중입니다").assertIsDisplayed()
+            compose.onNodeWithText("새 전파 없음").assertDoesNotExist()
+            saveScreen("health-quiet-waiting")
+            compose.runOnIdle { vm.bleHealth.value = ScanHealth(ScanState.ERROR, "BLE 오류") }
+            compose.onNodeWithText("감시가 완전하지 않습니다").assertIsDisplayed()
+            compose.onNodeWithText("새 전파 없음").assertDoesNotExist()
+            saveScreen("health-quiet-error")
+            compose.runOnIdle {
+                vm.bleHealth.value = ScanHealth(ScanState.RECEIVING, "신호 수신 중")
+                vm.scanning.value = false
+            }
+            compose.onNodeWithText("감시를 끝냈습니다").assertExists()
+            compose.onNodeWithText("새 전파 없음").assertDoesNotExist()
+        } finally { vm.shutdown() }
+    }
+
+    @Test fun collectionStillAllowsThreeMinuteFallbackWithoutWifiCompletions() {
+        val vm = launch()
+        try {
+            compose.onNodeWithText("빈 교실 측정 시작").performClick()
+            compose.waitUntil(10_000) { vm.devices.value.isNotEmpty() }
+            compose.runOnIdle {
+                vm.stopScan()
+                vm.simMode.value = false
+                vm.scanning.value = true
+                vm.healthTick.value = vm.scanSession.value!!.startedAtMs + 120_000
+            }
+            compose.onNodeWithText("빈 교실 기록 저장").assertIsNotEnabled()
+            compose.runOnIdle { vm.healthTick.value = vm.scanSession.value!!.startedAtMs + 180_000 }
+            compose.onNodeWithText("빈 교실 기록 저장").assertIsEnabled()
+            compose.runOnIdle { vm.scanning.value = false }
         } finally { vm.shutdown() }
     }
 
@@ -164,6 +232,15 @@ class GuardFlowTest {
             saveScreen("guard-small-found")
             compose.onNodeWithText("감시 끝내기").assertIsDisplayed()
             compose.onNodeWithText("빈 교실부터\n다시 측정").assertIsDisplayed()
+            compose.runOnIdle {
+                vm.stopScan()
+                vm.scanning.value = true
+                vm.bleHealth.value = ScanHealth(ScanState.ERROR, "BLE 오류")
+                vm.wifiHealth.value = ScanHealth(ScanState.COMPLETED, "와이파이 탐색 완료")
+            }
+            compose.onNodeWithText("새 신호 1개").assertIsDisplayed()
+            compose.onNodeWithText("1").assertIsDisplayed()
+            saveScreen("health-small-found-error")
         } finally { vm.shutdown() }
     }
 

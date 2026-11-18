@@ -19,6 +19,8 @@ import com.classroom.rfdetector.core.SnapshotSignal
 import com.classroom.rfdetector.core.SnapshotStore
 import com.classroom.rfdetector.core.TrackedDevice
 import com.classroom.rfdetector.core.WatchView
+import com.classroom.rfdetector.core.ScanHealth
+import com.classroom.rfdetector.core.ScanState
 import com.classroom.rfdetector.core.baselineGroupCounts
 import com.classroom.rfdetector.core.baselineSamples
 import com.classroom.rfdetector.core.baselineWifiAddresses
@@ -70,6 +72,8 @@ class AppViewModel(private val app: Context) : ViewModel() {
     val geigerOn = MutableStateFlow(false)
     val scanSession = MutableStateFlow<ScanSession?>(null)
     val healthTick = MutableStateFlow(0L)
+    val bleHealth = MutableStateFlow(ScanHealth(ScanState.STOPPED, "수신 중지"))
+    val wifiHealth = MutableStateFlow(ScanHealth(ScanState.STOPPED, "수신 중지"))
 
     /** 지금 감시에 쓰는 빈 교실 기록. null이면 아직 측정 전이다. */
     val baselineSnapshot = MutableStateFlow<SignalSnapshot?>(null)
@@ -214,6 +218,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
         refreshJob?.cancel(); refreshJob = null
         ble.stop()
         wifi.stop()
+        updateScanHealth(System.currentTimeMillis())
         if (geigerOn.value) setGeiger(false)
     }
 
@@ -310,12 +315,23 @@ class AppViewModel(private val app: Context) : ViewModel() {
         val view = if (baselineSet.value) watchView(list, baselineGroups, acknowledged.value, now, baselineWifi, baselineSamples) else WatchView()
         watch.value = view
         geiger.setClass(list.firstOrNull { it.trackingKey == findTarget.value && it.presence == SignalPresence.RECENT }?.distanceClass ?: DistanceClass.UNKNOWN)
+        updateScanHealth(now)
         // 설정 상태 확인은 1초에 한 번이면 충분하다.
         if (now - problemsCheckedAtMs >= 1_000) {
             problemsCheckedAtMs = now
             checkExamMode()
             // 감시 도중에 블루투스를 켠 경우 바로 받기 시작한다. 오류로 멈춘 탐색은 자동으로 되풀이하지 않는다.
             if (scanning.value && !simMode.value && !ble.active && ble.lastError == null && ble.isUsable()) ble.start(::onObservation)
+        }
+    }
+
+    private fun updateScanHealth(now: Long) {
+        if (scanning.value && simMode.value) {
+            bleHealth.value = ScanHealth(ScanState.RECEIVING, "가상 블루투스 수신 중", now)
+            wifiHealth.value = ScanHealth(ScanState.COMPLETED, "가상 와이파이 탐색 완료", now)
+        } else {
+            bleHealth.value = ble.health(now)
+            wifiHealth.value = wifi.health(now)
         }
     }
 

@@ -12,6 +12,8 @@ import com.classroom.rfdetector.core.RfObservation
 import com.classroom.rfdetector.core.bleDetails
 import com.classroom.rfdetector.core.bleHints
 import com.classroom.rfdetector.core.ScanSource
+import com.classroom.rfdetector.core.ScanHealth
+import com.classroom.rfdetector.core.ScanState
 
 /** BLE 광고 연속 스캔. LOW_LATENCY 로 사실상 연속 수신한다 */
 class BleScanner(context: Context) {
@@ -38,6 +40,17 @@ class BleScanner(context: Context) {
         private set
 
     fun isUsable(): Boolean = try { adapter?.isEnabled == true } catch (_: SecurityException) { false }
+
+    fun health(nowMs: Long): ScanHealth {
+        val received = lastReceivedAtMs
+        return when {
+            lastError != null -> ScanHealth(ScanState.ERROR, lastError!!, received)
+            !active -> ScanHealth(ScanState.STOPPED, "수신 중지", received)
+            received == null -> ScanHealth(ScanState.WAITING, "첫 신호를 기다리는 중")
+            nowMs - received > 15_000L -> ScanHealth(ScanState.WAITING, "최근 신호 없음 · 주변이 조용할 수도 있습니다", received)
+            else -> ScanHealth(ScanState.RECEIVING, "신호 수신 중", received)
+        }
+    }
 
     fun start(onObs: (RfObservation) -> Unit): Boolean {
         stop()
@@ -87,9 +100,8 @@ class BleScanner(context: Context) {
 
             override fun onScanFailed(errorCode: Int) {
                 if (callback !== this) return
-                handler.removeCallbacks(refresh)
-                active = false
-                fail("BLE 탐색 오류 ($errorCode) · 잠시 후 다시 시작하세요")
+                stop()
+                fail("BLE 탐색 오류 ($errorCode) · 설정을 확인하세요")
             }
         }
         return try {
@@ -133,7 +145,7 @@ class BleScanner(context: Context) {
             scanner.stopScan(cb)
             scanner.startScan(null, scanSettings(), cb)
             scanStartedAtElapsedMs = SystemClock.elapsedRealtime()
-            handler.postDelayed(refresh, CHECK_MS)
+            if (active) handler.postDelayed(refresh, CHECK_MS)
         } catch (_: SecurityException) {
             fail("BLE 탐색 권한을 확인하세요")
         } catch (_: IllegalStateException) {
@@ -144,6 +156,7 @@ class BleScanner(context: Context) {
     fun stop() {
         handler.removeCallbacks(refresh)
         active = false
+        lastError = null
         val cb = callback ?: return
         callback = null
         val ad = adapter ?: return
@@ -155,6 +168,7 @@ class BleScanner(context: Context) {
     }
 
     private fun fail(message: String): Boolean {
+        stop()
         active = false
         lastError = message
         return false

@@ -2,6 +2,7 @@ package com.classroom.rfdetector
 
 import android.content.ContextWrapper
 import android.os.Looper
+import com.classroom.rfdetector.core.ScanState
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -51,6 +52,17 @@ class ScanSessionTest {
         assertTrue(vm.baselineSet.value)
     }
 
+    @Test fun baselineStillRequiresAtLeastOneObservedDevice() {
+        vm.tracker.clear()
+        vm.stopScan()
+        assertTrue(vm.devices.value.isEmpty())
+        vm.scanning.value = true
+        vm.takeBaseline()
+        assertFalse(vm.baselineSet.value)
+        assertNull(vm.baselineSnapshot.value)
+        vm.scanning.value = false
+    }
+
     @Test fun emptyRoomRecordStartsWatchingAndOnlyNewKindsAreFlagged() {
         assertFalse(vm.baselineSet.value)
         assertEquals(0, vm.watch.value.count)
@@ -72,9 +84,13 @@ class ScanSessionTest {
         val session = vm.scanSession.value!!
         vm.acknowledge("BLE:name:anything")
         vm.pauseForBackground()
+        assertEquals(ScanState.STOPPED, vm.bleHealth.value.state)
+        assertEquals(ScanState.STOPPED, vm.wifiHealth.value.state)
         assertFalse(vm.scanning.value)
         vm.resumeFromBackground()
         assertTrue(vm.scanning.value)
+        assertEquals(ScanState.RECEIVING, vm.bleHealth.value.state)
+        assertEquals(ScanState.COMPLETED, vm.wifiHealth.value.state)
         assertEquals(session.id, vm.scanSession.value!!.id)
         assertEquals(1, vm.scanSession.value!!.pauses)
         assertEquals(5, vm.devices.value.size)
