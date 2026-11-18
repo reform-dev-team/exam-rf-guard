@@ -1,5 +1,6 @@
 package com.classroom.rfdetector
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.location.LocationManager
 import android.os.Build
@@ -45,7 +46,13 @@ import java.util.concurrent.Executors
 /** 감시가 완전하지 않은 이유. 해결 전까지는 해당 전파가 있어도 표시되지 않는다. */
 enum class RadioProblem { BLUETOOTH_OFF, WIFI_OFF, LOCATION_OFF }
 
-/** 빈 교실 기록 → 시험 중 감시의 상태를 화면 재생성과 무관하게 유지한다. 화면 밖에서는 수신을 멈춘다. */
+/**
+ * 빈 교실 기록 → 시험 중 감시의 상태를 화면 재생성과 무관하게 유지한다. 화면 밖에서는 수신을 멈춘다.
+ * `app`은 `MainActivity`에서 항상 `applicationContext`로만 주입된다. 테스트(`ScanSessionTest`)는 저장 경로를
+ * 임시 폴더로 바꾸려고 `Application`이 아닌 `ContextWrapper`를 넘기므로, 타입을 `Application`으로 좁히면
+ * 그 테스트가 깨진다. 그래서 타입을 좁히는 대신 여기서 lint 경고를 억제한다.
+ */
+@SuppressLint("StaticFieldLeak")
 class AppViewModel(private val app: Context) : ViewModel() {
     companion object {
         private val archiveDispatcher = Executors.newSingleThreadExecutor { task -> Thread(task, "rf-archive").apply { isDaemon = true } }.asCoroutineDispatcher()
