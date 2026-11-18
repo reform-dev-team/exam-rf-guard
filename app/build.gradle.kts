@@ -6,13 +6,13 @@ plugins {
 
 android {
     namespace = "com.classroom.rfdetector"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.classroom.rfdetector"
         minSdk = 29
-        targetSdk = 35
-        versionCode = 15
+        targetSdk = 36
+        versionCode = 16
         versionName = "1.0.2"
     }
 
