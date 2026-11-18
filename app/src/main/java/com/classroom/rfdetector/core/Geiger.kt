@@ -36,6 +36,7 @@ class GeigerController(context: Context) {
         cls = c
     }
 
+    @Synchronized
     fun start() {
         if (job?.isActive == true) return
         job = scope.launch {
@@ -52,14 +53,18 @@ class GeigerController(context: Context) {
                     continue
                 }
                 val dur = if (cls == DistanceClass.VERY_CLOSE) 130L else 60L
-                runCatching {
-                    vibrator.vibrate(VibrationEffect.createOneShot(dur, VibrationEffect.DEFAULT_AMPLITUDE))
+                // An in-flight pulse must finish before stop() cancels it.
+                synchronized(this@GeigerController) {
+                    if (isActive) runCatching {
+                        vibrator.vibrate(VibrationEffect.createOneShot(dur, VibrationEffect.DEFAULT_AMPLITUDE))
+                    }
                 }
                 delay(period)
             }
         }
     }
 
+    @Synchronized
     fun stop() {
         job?.cancel()
         job = null
