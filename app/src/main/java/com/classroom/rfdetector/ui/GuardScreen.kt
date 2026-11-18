@@ -258,7 +258,8 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
     val live = device.presence != SignalPresence.HISTORY
     val accent = if (live) classAccent(device.distanceClass) else RfColors.textDim
     // 새 전파로 올라온 것만 "확인함"으로 뺄 수 있다. 원래 있던 전파는 뺄 목록이 없다.
-    val flagged = (watch.wifi + watch.bluetooth + watch.far).any { it.key == device.groupKey }
+    val flaggedGroup = (watch.wifi + watch.bluetooth + watch.far).firstOrNull { it.key == device.groupKey }
+    val flagged = flaggedGroup != null
     // 경보 목록에서 빠졌다는 것만으로 빈 교실 기록에 있었다고 판단할 수는 없다.
     val recordedInBaseline = baseline?.signals.orEmpty().any { signal ->
         radioKey(signal.source, signal.address) == device.trackingKey
@@ -274,6 +275,7 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
                         color = RfColors.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
+            if (flaggedGroup?.copiesEmptyRoomName == true) Text("빈 교실에 있던 와이파이와 이름이 같지만, 빈 교실의 그 와이파이와 달리 임의 주소를 씁니다. 휴대폰 핫스팟이 주로 이런 주소를 씁니다. 이름을 따라 지은 다른 기기일 수 있으니 확인하세요.", color = RfColors.warning)
             kindNote(device)?.let { Text(it) }
             GuardPanel {
                 Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -343,7 +345,7 @@ fun GuideScreen() {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("잡는 것", fontWeight = FontWeight.Bold, color = RfColors.ok)
                 GuideList("자체 와이파이를 여는 카메라", "핫스팟을 켠 휴대폰", "와이파이 에그(휴대용 와이파이)")
-                Text("와이파이를 켜면 30초~1분 안에 보입니다. 빈 교실 기록에 없던 이름만 알리며, 이름과 설정에 따라 알리지 않는 경우가 있습니다.", style = MaterialTheme.typography.bodySmall)
+                Text("와이파이를 켜면 30초~1분 안에 보입니다. 빈 교실 기록에 없던 이름과, 이름은 같지만 빈 교실에 없던 임의 주소를 쓰는 것을 알리며, 이름과 설정에 따라 알리지 않는 경우가 있습니다.", style = MaterialTheme.typography.bodySmall)
             }
         }
         Surface(color = warnDim, shape = RoundedCornerShape(18.dp)) {
@@ -463,6 +465,7 @@ private fun LazyListScope.groupRows(group: SignalGroup, open: Boolean, onToggle:
     val single = group.devices.size == 1
     item(key = "group-${group.key}") {
         SignalCard(group.strongest, when {
+            single && group.copiesEmptyRoomName -> "빈 교실 와이파이와 이름만 같은 다른 기기"
             single -> null
             group.baselineCount == 0 -> "같은 전파 ${group.devices.size}개 · ${if (open) "접기" else "펼치기"}"
             else -> "빈 교실 때 ${group.baselineCount}개 → 지금 ${group.devices.size}개 · ${if (open) "접기" else "펼치기"}"
