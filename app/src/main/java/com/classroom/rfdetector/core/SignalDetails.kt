@@ -69,6 +69,7 @@ fun wifiDetails(frequencyMhz: Int, capabilities: String?, standard: Int?): Map<S
     val (band, channel) = when (frequencyMhz) {
         2484 -> "2.4GHz" to 14
         in 2412..2472 -> "2.4GHz" to (frequencyMhz - 2407) / 5
+        5935 -> "6GHz" to 2 // 6GHz 채널 2(20MHz)만 5955 아래에 있다
         in 5160..5895 -> "5GHz" to (frequencyMhz - 5000) / 5
         in 5955..7115 -> "6GHz" to (frequencyMhz - 5950) / 5
         else -> null to null
@@ -77,10 +78,11 @@ fun wifiDetails(frequencyMhz: Int, capabilities: String?, standard: Int?): Map<S
     capabilities?.let { caps ->
         details["보안"] = when {
             "SAE" in caps -> "WPA3"
+            // Android는 OWE도 "[RSN-OWE-CCMP]"처럼 RSN을 붙여 알리므로 RSN보다 먼저 본다.
+            "OWE" in caps -> "암호 없음 · 통신은 암호화"
             "WPA2" in caps || "RSN" in caps -> "WPA2"
             "WPA" in caps -> "WPA"
             "WEP" in caps -> "WEP(오래된 방식)"
-            "OWE" in caps -> "암호 없음 · 통신은 암호화"
             else -> "암호 없음(열린 와이파이)"
         }
     }
