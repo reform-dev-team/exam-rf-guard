@@ -190,4 +190,26 @@ class BleScannerTest {
         assertEquals(latestTime, scanner.lastReceivedAtMs)
         scanner.stop()
     }
+
+    @Test fun turningBluetoothOffStopsQuietlySoTheScanCanResumeWhenItIsBackOn() {
+        val context = RuntimeEnvironment.getApplication()
+        val adapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
+        shadowOf(adapter).setEnabled(true)
+        val scanner = BleScanner(context)
+        assertTrue(scanner.start { })
+        val result = ScanResult(adapter.getRemoteDevice("00:11:22:33:44:55"), null, -60, SystemClock.elapsedRealtimeNanos())
+        shadowOf(adapter.bluetoothLeScanner).scanCallbacks.single().onScanResult(1, result)
+
+        // 감시 중에 블루투스가 꺼진 채로 다음 탐색 재시작 시점(4분)을 넘긴다.
+        shadowOf(adapter).setEnabled(false)
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(Duration.ofMinutes(5))
+        assertFalse(scanner.active)
+        assertNull("Bluetooth off is not a scan error, so the view model may restart it", scanner.lastError)
+
+        // 다시 켜면 새로 시작할 수 있다.
+        shadowOf(adapter).setEnabled(true)
+        assertTrue(scanner.isUsable())
+        assertTrue(scanner.start { })
+        scanner.stop()
+    }
 }
