@@ -306,7 +306,7 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
         }
         Surface(color = RfColors.surface) {
             Row(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (flagged) OutlinedButton(onClick = { vm.acknowledge(device.acknowledgeKey); close() }, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = RoundedCornerShape(16.dp)) { Text("확인함\n목록에서 빼기") }
+                if (flagged) OutlinedButton(onClick = { vm.acknowledge(flaggedGroup?.acknowledgeKeyFor(device) ?: device.acknowledgeKey); close() }, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = RoundedCornerShape(16.dp)) { Text("확인함\n목록에서 빼기") }
                 Button(onClick = close, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = RfColors.surfaceAlt, contentColor = RfColors.textPrimary)) { Text("목록으로", fontWeight = FontWeight.Bold) }
             }
@@ -467,6 +467,7 @@ private fun LazyListScope.groupRows(group: SignalGroup, open: Boolean, onToggle:
         SignalCard(group.strongest, when {
             single && group.copiesEmptyRoomName -> "빈 교실 와이파이와 이름만 같은 다른 기기"
             single -> null
+            group.copiesEmptyRoomName -> "빈 교실 와이파이와 이름만 같은 다른 기기 ${group.devices.size}개 · ${if (open) "접기" else "펼치기"}"
             group.baselineCount == 0 -> "같은 전파 ${group.devices.size}개 · ${if (open) "접기" else "펼치기"}"
             else -> "빈 교실 때 ${group.baselineCount}개 → 지금 ${group.devices.size}개 · ${if (open) "접기" else "펼치기"}"
         }) { if (single) onFind(group.strongest.trackingKey) else onToggle() }

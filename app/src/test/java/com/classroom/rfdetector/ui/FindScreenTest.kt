@@ -130,6 +130,26 @@ class FindScreenTest {
         compose.onNodeWithText("확인함\n목록에서 빼기").assertDoesNotExist()
     }
 
+    @Test fun acknowledgingACopiedWifiNameOnlyHidesThatAddress() {
+        compose.runOnIdle {
+            vm.baselineSnapshot.value = SignalSnapshot(
+                "시험실", System.currentTimeMillis(), true,
+                listOf(SnapshotSignal("10:00:00:00:00:01", ScanSource.WIFI, "SCHOOL", -60.0, "제조사 미확인")),
+            )
+            vm.startScan()
+            vm.stopScan()
+            vm.tracker.clear()
+        }
+        val first = observation(address = "DA:A1:19:3B:7C:01", source = ScanSource.WIFI).copy(name = "SCHOOL")
+        val second = observation(address = "3E:55:01:9A:20:7F", source = ScanSource.WIFI).copy(name = "SCHOOL")
+        replaceObservation(first)
+        show(first)
+        compose.onNodeWithText("확인함\n목록에서 빼기").performClick()
+        compose.runOnIdle { vm.tracker.update(second); vm.acknowledge("test:refresh") }
+
+        assertEquals(listOf(second.trackingKey), vm.watch.value.wifi.single().devices.map { it.trackingKey })
+    }
+
     @Test fun theSameAddressOnAnotherRadioIsNotAnEmptyRoomRecord() {
         val signal = observation(address = baselineAddress, source = ScanSource.WIFI)
         replaceObservation(signal)

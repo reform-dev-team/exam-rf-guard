@@ -38,9 +38,10 @@ val TrackedDevice.groupKey: String get() = signalGroupKey(source, key, displayNa
  * "확인함"으로 목록에서 뺄 때 쓰는 키. 보통은 묶음 키지만, 이름 숨김 와이파이는 서로 다른 기기가 한 묶음에 모이므로
  * 주소마다 따로 뺀다. 묶음째 빼면 숨김 와이파이 하나를 확인한 뒤 새로 켜진 다른 숨김 핫스팟까지 알리지 않게 된다.
  */
-val TrackedDevice.acknowledgeKey: String get() = groupKey.let { group ->
-    if (group == HIDDEN_WIFI_KEY) "$HIDDEN_WIFI_KEY:${key.uppercase(Locale.ROOT)}" else group
-}
+val TrackedDevice.acknowledgeKey: String get() = if (groupKey == HIDDEN_WIFI_KEY) addressAcknowledgeKey else groupKey
+
+val TrackedDevice.addressAcknowledgeKey: String get() = "$groupKey:${key.uppercase(Locale.ROOT)}"
+
 val SnapshotSignal.groupKey: String get() = signalGroupKey(source, address, name, manufacturerIds, hints)
 
 /** 빈 교실 기록에서 묶음마다 동시에 몇 개였는지. 저장 순간 잡히지 않던 묶음은 1개로 친다. */
@@ -50,6 +51,8 @@ fun baselineGroupCounts(baseline: SignalSnapshot): Map<String, Int> = baseline.s
 /** 지금 잡히는 한 묶음. devices는 센 순서다. */
 data class SignalGroup(val key: String, val devices: List<TrackedDevice>, val baselineCount: Int, val alert: Boolean, val copiesEmptyRoomName: Boolean = false) {
     val strongest: TrackedDevice get() = devices.first()
+
+    fun acknowledgeKeyFor(device: TrackedDevice): String = if (copiesEmptyRoomName) device.addressAcknowledgeKey else device.acknowledgeKey
 }
 
 /**
@@ -99,16 +102,18 @@ fun sharesVendorWithEmptyRoomRouter(device: TrackedDevice, baseline: Map<String,
     return baselineWifi.any { known -> isLocallyAdministered(known) == false && known.substring(3, 8) == candidate.substring(3, 8) }
 }
 
+private fun TrackedDevice.reusesEmptyRoomWifi(baseline: Map<String, Int>, baselineWifi: Set<String>): Boolean = source == ScanSource.WIFI &&
+    (isSameAccessPoint(key, baselineWifi) || sharesVendorWithEmptyRoomRouter(this, baseline, baselineWifi) || "$groupKey$LOCAL_ADDRESS_SUFFIX" in baseline)
+
 fun watchView(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowledged: Set<String>, nowMs: Long, baselineWifi: Set<String> = emptySet(),
     samples: List<SnapshotSignal> = emptyList()): WatchView {
     val live = devices.filter { it.presence != SignalPresence.HISTORY }
     // 전원을 끈 아이폰과 에어태그가 내는 신호. 제출한 휴대폰 수만큼 잡힐 수 있어 알리지 않고 따로 센다.
     val (findMy, others) = live.partition { it.source == ScanSource.BLE && it.hints.primary == SignalHint.APPLE_FIND_MY }
     // 이름을 숨긴 것까지 포함해, 빈 교실에 있던 공유기가 뒤늦게 내보인 다른 주소는 원래 있던 것이다.
-    val rest = others.filterNot { it.source == ScanSource.WIFI && isSameAccessPoint(it.key, baselineWifi) }
-        .filterNot { sharesVendorWithEmptyRoomRouter(it, baseline, baselineWifi) }
+    val rest = others.filterNot { it.reusesEmptyRoomWifi(baseline, baselineWifi) }
         // 확인함으로 뺀 이름 숨김 와이파이는 그 주소만 뺀다.
-        .filterNot { it.groupKey == HIDDEN_WIFI_KEY && it.acknowledgeKey in acknowledged }
+        .filterNot { it.addressAcknowledgeKey in acknowledged }
     val flagged = mutableListOf<SignalGroup>()
     rest.groupBy { it.groupKey }.forEach { (key, members) ->
         val sorted = members.sortedByDescending { it.rssiEma ?: Double.NEGATIVE_INFINITY }
@@ -149,13 +154,13 @@ private fun knownGroups(devices: List<TrackedDevice>, baseline: Map<String, Int>
     samples: List<SnapshotSignal>): List<KnownGroup> {
     val byStrength = compareByDescending<TrackedDevice> { it.rssiEma ?: Double.NEGATIVE_INFINITY }
     val members = devices.filterNot { it.source == ScanSource.BLE && it.hints.primary == SignalHint.APPLE_FIND_MY }.groupBy { it.groupKey }
-    fun row(key: String, sample: SnapshotSignal?): KnownGroup {
-        val all = members[key].orEmpty()
-        return KnownGroup(key, sample, baseline[key] ?: 0, all.filter { it.presence != SignalPresence.HISTORY }.sortedWith(byStrength), all.maxByOrNull { it.lastSeenMs })
-    }
+    fun row(key: String, sample: SnapshotSignal?, all: List<TrackedDevice> = members[key].orEmpty()): KnownGroup =
+        KnownGroup(key, sample, baseline[key] ?: 0, all.filter { it.presence != SignalPresence.HISTORY }.sortedWith(byStrength), all.maxByOrNull { it.lastSeenMs })
     val fromEmptyRoom = samples.map { row(it.groupKey, it) }
     val recorded = samples.map { it.groupKey }.toSet()
-    val later = members.filter { (key, all) -> key !in recorded && (key in acknowledged || all.any { it.acknowledgeKey in acknowledged } || all.any { it.source == ScanSource.WIFI && isSameAccessPoint(it.key, baselineWifi) } || all.any { sharesVendorWithEmptyRoomRouter(it, baseline, baselineWifi) }) }
-        .entries.sortedWith(compareBy({ entry -> entry.value.minOf { it.firstSeenMs } }, { it.key })).map { row(it.key, null) }
+    val later = members.filterKeys { it !in recorded }
+        .mapValues { (key, all) -> if (key in acknowledged) all else all.filter { it.addressAcknowledgeKey in acknowledged || it.reusesEmptyRoomWifi(baseline, baselineWifi) } }
+        .filterValues { it.isNotEmpty() }
+        .entries.sortedWith(compareBy({ entry -> entry.value.minOf { it.firstSeenMs } }, { it.key })).map { row(it.key, null, it.value) }
     return fromEmptyRoom + later
 }

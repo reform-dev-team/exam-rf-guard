@@ -241,6 +241,36 @@ class SignalGroupsTest {
         assertTrue(now(101_000, emptySet()).wifi.single().copiesEmptyRoomName)
     }
 
+    @Test fun acknowledgingACopyOnlyHidesThatAddress() {
+        val now = wifiView("10:00:00:00:00:01" to "SCHOOL")
+        wifi("da:a1:19:3b:7c:01", 100_000, "SCHOOL", rssi = -50)
+        val first = now(101_000, emptySet()).wifi.single()
+        val acknowledged = setOf(first.acknowledgeKeyFor(first.strongest))
+        assertEquals(0, now(101_000, acknowledged).count)
+
+        wifi("3e:55:01:9a:20:7f", 110_000, "SCHOOL", rssi = -55)
+        val view = now(111_000, acknowledged)
+        assertEquals(listOf("3e:55:01:9a:20:7f"), view.wifi.single().devices.map { it.key })
+        assertEquals(listOf("da:a1:19:3b:7c:01"), view.knownGroups.single { it.key == "WIFI:name:school:local" }.live.map { it.key })
+    }
+
+    @Test fun globalAddressOfANameRecordedOnlyOnLocalAddressesIsNotNew() {
+        val now = wifiView("da:a1:19:3b:7c:01" to "U+Zone")
+        wifi("10:00:00:00:00:09", 100_000, "U+Zone", rssi = -50)
+        val view = now(101_000, emptySet())
+        assertEquals(0, view.count)
+        assertTrue(view.far.isEmpty())
+        assertEquals(listOf("10:00:00:00:00:09"), view.knownGroups.single { it.key == "WIFI:name:u+zone" }.live.map { it.key })
+    }
+
+    @Test fun hotspotIsNotListedWithAnotherRouterOfTheEmptyRoomVendor() {
+        val now = wifiView("b4:a9:4f:c7:31:a2" to "SCHOOL")
+        wifi("06:a9:4f:10:20:30", 100_000, "SCHOOL", rssi = -60)
+        wifi("da:a1:19:3b:7c:01", 100_000, "SCHOOL", rssi = -50)
+        val known = now(101_000, emptySet()).knownGroups.single { it.key == "WIFI:name:school:local" }
+        assertEquals(listOf("06:a9:4f:10:20:30"), known.live.map { it.key })
+    }
+
     @Test fun newNameOnALocalAddressIsNotMarkedAsACopy() {
         val now = wifiView("10:00:00:00:00:01" to "SCHOOL")
         wifi("da:a1:19:3b:7c:01", 100_000, "AndroidAP_1234", rssi = -50)
