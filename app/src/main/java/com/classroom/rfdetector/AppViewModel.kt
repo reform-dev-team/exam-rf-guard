@@ -11,6 +11,7 @@ import com.classroom.rfdetector.core.DeviceTracker
 import com.classroom.rfdetector.core.DistanceClass
 import com.classroom.rfdetector.core.GeigerController
 import com.classroom.rfdetector.core.RfObservation
+import com.classroom.rfdetector.core.RefreshCadence
 import com.classroom.rfdetector.core.ScanSession
 import com.classroom.rfdetector.core.SignalPresence
 import com.classroom.rfdetector.core.SignalSnapshot
@@ -36,6 +37,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -183,9 +187,13 @@ class AppViewModel(private val app: Context) : ViewModel() {
             wifi.start(::onObservation)
         }
         refreshJob = scope.launch {
-            while (isActive) {
-                refresh()
-                delay(100)
+            combine(baselineSet, geigerOn) { hasBaseline, proximityFeedback ->
+                RefreshCadence.intervalMs(hasBaseline, proximityFeedback)
+            }.distinctUntilChanged().collectLatest { intervalMs ->
+                while (true) {
+                    refresh()
+                    delay(intervalMs)
+                }
             }
         }
     }
