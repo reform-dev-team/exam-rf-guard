@@ -17,6 +17,7 @@ class DeviceTracker {
         var lastSeen = 0L
         var observationCount = 0
         var peakRssi: Int? = null
+        var bleAddressType = BleAddressType.UNKNOWN
     }
 
     private val tracks = ConcurrentHashMap<String, Track>()
@@ -38,6 +39,7 @@ class DeviceTracker {
         if (!late) t.details.putAll(obs.details)
         if (!late || t.name == null) obs.name?.takeIf { it.isNotBlank() }?.let { t.name = it }
         if (!late) t.hidden = obs.hidden
+        if (obs.bleAddressType != BleAddressType.UNKNOWN) t.bleAddressType = obs.bleAddressType
         obs.rssi?.let { r ->
             if (!late) {
                 t.ema = RssiFilter.ema(if (t.periods.size > previousPeriodCount) null else t.ema, r)
@@ -72,6 +74,7 @@ class DeviceTracker {
                 referenceRssiAt1m = t.tx,
                 hints = t.hints.toSet(),
                 details = t.details.toMap(),
+                bleAddressType = t.bleAddressType,
             )
         }.sortedWith(
             compareBy<TrackedDevice> { it.presence.ordinal }

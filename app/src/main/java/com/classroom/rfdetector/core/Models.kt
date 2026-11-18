@@ -26,6 +26,14 @@ enum class DistanceClass(val label: String) {
     UNKNOWN("측정 중"),
 }
 
+enum class BleAddressType { PUBLIC, RANDOM, UNKNOWN }
+
+fun bleAddressType(address: String, reported: BleAddressType): BleAddressType {
+    if (reported != BleAddressType.UNKNOWN) return reported
+    val firstOctet = address.takeIf { it.length == 17 }?.take(2)?.toIntOrNull(16) ?: return BleAddressType.UNKNOWN
+    return if (firstOctet and 0x03 != 0) BleAddressType.RANDOM else BleAddressType.UNKNOWN
+}
+
 /** 스캐너/시뮬레이터가 올리는 단일 관측값 */
 data class RfObservation(
     val key: String,          // BLE MAC 또는 Wi-Fi BSSID
@@ -38,6 +46,7 @@ data class RfObservation(
     val manufacturerIds: Set<Int> = emptySet(),
     val hints: Set<SignalHint> = emptySet(),
     val details: Map<String, String> = emptyMap(),
+    val bleAddressType: BleAddressType = BleAddressType.UNKNOWN,
 ) {
     val trackingKey: String get() = radioKey(source, key)
 }
@@ -63,8 +72,10 @@ data class TrackedDevice(
     val hints: Set<SignalHint> = emptySet(),
     /** 기기가 알린 나머지 정보(항목 → 값). 화면 표시용이며 저장하지 않는다. */
     val details: Map<String, String> = emptyMap(),
+    val bleAddressType: BleAddressType = BleAddressType.UNKNOWN,
 ) {
     val trackingKey: String get() = radioKey(source, key)
+    val addressType: BleAddressType get() = bleAddressType(key, bleAddressType)
 }
 
 const val WEAK_SIGNAL_DBM = -85

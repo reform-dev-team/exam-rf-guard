@@ -423,8 +423,9 @@ private fun infoRows(device: TrackedDevice): List<Pair<String, String>> = buildL
     if (device.hints.isNotEmpty()) add("종류 단서" to device.hints.sortedBy { it.ordinal }.joinToString(" / ") { it.label })
     if (device.identity.advertisedCompanies.isNotEmpty()) add("제조사 · 블루투스 회사 코드" to device.identity.advertisedCompanies.joinToString(", "))
     add("제조사 · 주소 앞자리" to when {
-        isLocallyAdministered(device.key) == true && wifi -> "임의 주소라 조회할 수 없음. 휴대폰 핫스팟이 주로 이런 주소를 씁니다."
-        isLocallyAdministered(device.key) == true -> "임의 주소라 조회할 수 없음. 휴대폰과 이어폰은 주소를 주기적으로 바꿉니다."
+        wifi && isLocallyAdministered(device.key) == true -> "임의 주소라 조회할 수 없음. 휴대폰 핫스팟이 주로 이런 주소를 씁니다."
+        !wifi && device.addressType == BleAddressType.RANDOM -> "임의 주소라 조회할 수 없음. 휴대폰과 이어폰은 주소를 주기적으로 바꿉니다."
+        !wifi && device.addressType == BleAddressType.UNKNOWN -> "주소 유형을 확인할 수 없어 조회하지 않음"
         else -> device.identity.macOrganization ?: "등록부에 없음"
     })
     if (wifi && device.hidden) add("와이파이 이름" to "숨김")
@@ -495,7 +496,7 @@ private fun KnownCard(group: KnownGroup, open: Boolean, onClick: () -> Unit) {
     val sample = group.sample
     val (kind, symbol) = if (shown != null) plainKind(shown) else plainKind(sample!!.source, sample.address, sample.name, sample.hints)
     val (title, subtitle) = if (shown != null) cardLabels(shown)
-        else cardLabels(kind, advertisedName(sample!!.address, sample.name), sample.manufacturer.takeUnless { it == "제조사 미확인" }, sample.source == ScanSource.WIFI)
+        else cardLabels(kind, advertisedName(sample!!.address, sample.name), recordedMaker(sample), sample.source == ScanSource.WIFI)
     val live = group.live.isNotEmpty()
     val strongest = group.live.firstOrNull()
     Surface(onClick = onClick, enabled = live, color = RfColors.surface, shape = RoundedCornerShape(16.dp)) {

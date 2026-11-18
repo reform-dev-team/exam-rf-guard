@@ -19,6 +19,43 @@ class DeviceIdentityTest {
         assertNull(identity.macOrganization)
     }
 
+    @Test fun bleMacLookupNeedsAnAddressReportedAsPublic() {
+        val address = "00:11:22:33:44:55"
+        assertEquals("Registered Vendor", resolver.resolve(address, null, setOf(ScanSource.BLE), emptySet(), BleAddressType.PUBLIC).macOrganization)
+        assertNull(resolver.resolve(address, null, setOf(ScanSource.BLE), emptySet(), BleAddressType.RANDOM).macOrganization)
+        assertNull(resolver.resolve(address, null, setOf(ScanSource.BLE), emptySet(), BleAddressType.UNKNOWN).macOrganization)
+        assertNull(resolver.resolve(address, null, setOf(ScanSource.BLE), emptySet()).macOrganization)
+        assertEquals("Registered Vendor", resolver.resolve(address, null, setOf(ScanSource.WIFI), emptySet()).macOrganization)
+    }
+
+    @Test fun randomBleAddressesThatCollideWithTheBundledRegistryAreNotNamed() {
+        val vendors = File("src/main/assets/mac-vendors.tsv").readLines().associate { it.substringBefore('\t') to it.substringAfter('\t') }
+        val bundled = DeviceIdentityResolver(vendors, emptyMap())
+        for ((address, vendor) in listOf("58:AD:12:34:56:78" to "Apple, Inc.", "E8:0A:B9:34:56:78" to "Cisco Systems, Inc")) {
+            assertEquals(vendor, vendors[address.replace(":", "").take(6)])
+            assertNull(bundled.resolve(address, null, setOf(ScanSource.BLE), emptySet(), BleAddressType.RANDOM).macOrganization)
+            assertNull(bundled.resolve(address, null, setOf(ScanSource.BLE), emptySet(), BleAddressType.UNKNOWN).macOrganization)
+            assertEquals("제조사 미확인", bundled.resolve(address, null, setOf(ScanSource.BLE), emptySet(), BleAddressType.UNKNOWN).summary)
+        }
+    }
+
+    @Test fun addressTypeIsReadFromTheAddressOnlyWhenItCannotBePublic() {
+        assertEquals(BleAddressType.PUBLIC, bleAddressType("02:11:22:33:44:55", BleAddressType.PUBLIC))
+        assertEquals(BleAddressType.RANDOM, bleAddressType("00:11:22:33:44:55", BleAddressType.RANDOM))
+        assertEquals(BleAddressType.RANDOM, bleAddressType("DA:11:22:33:44:55", BleAddressType.UNKNOWN))
+        assertEquals(BleAddressType.RANDOM, bleAddressType("01:11:22:33:44:55", BleAddressType.UNKNOWN))
+        assertEquals(BleAddressType.UNKNOWN, bleAddressType("58:AD:12:34:56:78", BleAddressType.UNKNOWN))
+        assertEquals(BleAddressType.UNKNOWN, bleAddressType("sim-airpods", BleAddressType.UNKNOWN))
+    }
+
+    @Test fun recordedBleRegistryNamesAreNotReusedOnCards() {
+        fun signal(source: ScanSource, manufacturer: String) = SnapshotSignal("58:AD:12:34:56:78", source, "BLE 기기 56:78", -60.0, manufacturer)
+        assertNull(recordedMaker(signal(ScanSource.BLE, "Apple, Inc. · MAC 등록사")))
+        assertNull(recordedMaker(signal(ScanSource.BLE, "제조사 미확인")))
+        assertEquals("Apple, Inc. · BLE 광고", recordedMaker(signal(ScanSource.BLE, "Apple, Inc. · BLE 광고")))
+        assertEquals("Apple, Inc. · MAC 등록사", recordedMaker(signal(ScanSource.WIFI, "Apple, Inc. · MAC 등록사")))
+    }
+
     @Test fun nameMatchComesFromSpecificBleNameNotMacOrWifiSsid() {
         assertNull(resolver.resolve("00:11:22:33:44:55", null, setOf(ScanSource.BLE), setOf(76)).audioNameMatch)
         assertNull(resolver.resolve("00:11:22:33:44:55", "AirPods Pro", setOf(ScanSource.WIFI), emptySet()).audioNameMatch)

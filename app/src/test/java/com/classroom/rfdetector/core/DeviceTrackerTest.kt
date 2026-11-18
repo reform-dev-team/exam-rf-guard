@@ -14,6 +14,13 @@ class DeviceTrackerTest {
         assertEquals(listOf("strong", "weak", "unknown"), tracker.snapshot(1000).map { it.key })
     }
 
+    @Test fun reportedAddressTypeIsKeptWhenALaterObservationDoesNotReportIt() {
+        val tracker = DeviceTracker()
+        tracker.update(observation("58:AD:12:34:56:78", -60).copy(bleAddressType = BleAddressType.RANDOM))
+        tracker.update(observation("58:AD:12:34:56:78", -60, 1100))
+        assertEquals(BleAddressType.RANDOM, tracker.snapshot(1100).single().addressType)
+    }
+
     @Test fun staleDevicesExpireFromTheActiveList() {
         val tracker = DeviceTracker()
         tracker.update(observation("existing", -40))

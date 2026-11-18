@@ -304,7 +304,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
         val now = System.currentTimeMillis()
         healthTick.value = now
         val list = tracker.snapshot(now, includeInactive = true).map { d ->
-            d.copy(identity = identityResolver.resolve(d.key, d.displayName, setOf(d.source), d.manufacturerIds))
+            d.copy(identity = identityResolver.resolve(d.key, d.displayName, setOf(d.source), d.manufacturerIds, d.addressType))
         }
         _devices.value = list
         val view = if (baselineSet.value) watchView(list, baselineGroups, acknowledged.value, now, baselineWifi, baselineSamples) else WatchView()

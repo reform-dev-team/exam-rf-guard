@@ -1,17 +1,29 @@
 package com.classroom.rfdetector.scanner
 
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import com.classroom.rfdetector.core.BleAddressType
 import com.classroom.rfdetector.core.RfObservation
 import com.classroom.rfdetector.core.bleDetails
 import com.classroom.rfdetector.core.bleHints
 import com.classroom.rfdetector.core.ScanSource
+
+internal fun reportedAddressType(device: BluetoothDevice): BleAddressType {
+    if (Build.VERSION.SDK_INT < 35) return BleAddressType.UNKNOWN
+    return when (device.addressType) {
+        BluetoothDevice.ADDRESS_TYPE_PUBLIC -> BleAddressType.PUBLIC
+        BluetoothDevice.ADDRESS_TYPE_RANDOM -> BleAddressType.RANDOM
+        else -> BleAddressType.UNKNOWN
+    }
+}
 
 /** BLE 광고 연속 스캔. LOW_LATENCY 로 사실상 연속 수신한다 */
 class BleScanner(context: Context) {
@@ -77,6 +89,7 @@ class BleScanner(context: Context) {
                         hints = bleHints(result.scanRecord?.bytes),
                         details = bleDetails(result.scanRecord?.bytes, result.isConnectable, result.isLegacy,
                             result.scanRecord?.txPowerLevel?.takeIf { it != Int.MIN_VALUE }),
+                        bleAddressType = reportedAddressType(result.device),
                     )
                 )
             }

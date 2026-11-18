@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import com.classroom.rfdetector.AppViewModel
+import com.classroom.rfdetector.core.BleAddressType
 import com.classroom.rfdetector.core.RfObservation
 import com.classroom.rfdetector.core.ScanSource
 import com.classroom.rfdetector.core.SignalHint
@@ -71,6 +72,20 @@ class FindScreenTest {
     private fun show(observation: RfObservation) {
         compose.setContent { AppRfTheme { FindScreen(vm, observation.trackingKey, onBack = {}) } }
         compose.onNodeWithText("기기 정보").assertExists()
+    }
+
+    @Test fun bluetoothAddressLookupRowFollowsTheReportedAddressType() {
+        val address = "58:AD:12:34:56:78"
+        val random = observation(address = address).copy(bleAddressType = BleAddressType.RANDOM)
+        replaceObservation(random)
+        show(random)
+        compose.onNodeWithText("임의 주소라 조회할 수 없음. 휴대폰과 이어폰은 주소를 주기적으로 바꿉니다.").assertExists()
+        compose.onNodeWithText("등록부에 없음").assertDoesNotExist()
+
+        val unknown = observation(address = address)
+        replaceObservation(unknown)
+        compose.onNodeWithText("주소 유형을 확인할 수 없어 조회하지 않음").assertExists()
+        compose.onNodeWithText("등록부에 없음").assertDoesNotExist()
     }
 
     @Test fun recordedAddressKeepsItsLabelRegardlessOfAddressCase() {
