@@ -126,7 +126,7 @@
 
 ## 빌드
 
-JDK 17 이상과 Android SDK Platform 35가 필요합니다. 프로젝트 루트의 `local.properties`에 `sdk.dir`을 지정합니다.
+JDK 17 이상과 Android SDK Platform 36이 필요합니다. 프로젝트 루트의 `local.properties`에 `sdk.dir`을 지정합니다.
 
 ```shell
 ./gradlew testDebugUnitTest assembleDebug lintDebug
