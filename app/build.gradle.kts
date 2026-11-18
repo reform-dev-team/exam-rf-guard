@@ -9,7 +9,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.classroom.rfdetector"
+        applicationId = "kr.reformparty.koriyoscan"
         minSdk = 29
         targetSdk = 36
         versionCode = 16

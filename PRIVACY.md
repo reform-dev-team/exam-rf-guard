@@ -1,6 +1,6 @@
 # 개인정보처리방침
 
-KoriyoSCAN(패키지 `com.classroom.rfdetector`)에 적용됩니다. 시행일: 2026년 11월 18일.
+KoriyoSCAN(패키지 `kr.reformparty.koriyoscan`)에 적용됩니다. 시행일: 2026년 11월 18일.
 
 ## 요약
 
