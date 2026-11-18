@@ -206,15 +206,17 @@ class AppViewModel(private val app: Context) : ViewModel() {
 
     /** keepSilent: 앱을 잠시 벗어난 동안에도 시험 중이므로 무음을 유지한다. */
     fun stopScan(keepSilent: Boolean = false) {
+        if (scanning.value) {
+            // 마지막 갱신은 아직 감시 중인 상태로 한다. 무음 해제는 그 뒤에 해야 갱신 안의 설정 확인이 무음을 다시 켜지 못한다.
+            refresh()
+            scanning.value = false
+            simJob?.cancel(); simJob = null
+            refreshJob?.cancel(); refreshJob = null
+            ble.stop()
+            wifi.stop()
+            if (geigerOn.value) setGeiger(false)
+        }
         if (!keepSilent) silent.off()
-        if (!scanning.value) return
-        refresh()
-        scanning.value = false
-        simJob?.cancel(); simJob = null
-        refreshJob?.cancel(); refreshJob = null
-        ble.stop()
-        wifi.stop()
-        if (geigerOn.value) setGeiger(false)
     }
 
     private fun applyBaseline() {
