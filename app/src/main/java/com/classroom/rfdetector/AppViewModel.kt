@@ -22,6 +22,7 @@ import com.classroom.rfdetector.core.WatchView
 import com.classroom.rfdetector.core.baselineGroupCounts
 import com.classroom.rfdetector.core.baselineSamples
 import com.classroom.rfdetector.core.baselineWifiAddresses
+import com.classroom.rfdetector.core.baselineWifiVendors
 import com.classroom.rfdetector.core.watchView
 import com.classroom.rfdetector.scanner.BleScanner
 import com.classroom.rfdetector.scanner.WifiScanner
@@ -81,6 +82,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
     private val snapshotStore = SnapshotStore(app.filesDir)
     private var baselineGroups: Map<String, Int> = emptyMap()
     private var baselineWifi: Set<String> = emptySet()
+    private var baselineVendors: Map<String, Set<String>> = emptyMap()
     private var baselineSamples: List<SnapshotSignal> = emptyList()
 
     /** 빈 교실 기록과 비교해 지금 잡히는 전파를 묶음으로 나눈 결과. */
@@ -222,6 +224,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
         baselineSet.value = baseline != null
         baselineGroups = baseline?.let(::baselineGroupCounts) ?: emptyMap()
         baselineWifi = baseline?.let(::baselineWifiAddresses) ?: emptySet()
+        baselineVendors = baseline?.let(::baselineWifiVendors) ?: emptyMap()
         baselineSamples = baseline?.let { baselineSamples(it) } ?: emptyList()
     }
 
@@ -307,7 +310,7 @@ class AppViewModel(private val app: Context) : ViewModel() {
             d.copy(identity = identityResolver.resolve(d.key, d.displayName, setOf(d.source), d.manufacturerIds))
         }
         _devices.value = list
-        val view = if (baselineSet.value) watchView(list, baselineGroups, acknowledged.value, now, baselineWifi, baselineSamples) else WatchView()
+        val view = if (baselineSet.value) watchView(list, baselineGroups, acknowledged.value, now, baselineWifi, baselineSamples, baselineVendors) else WatchView()
         watch.value = view
         geiger.setClass(list.firstOrNull { it.trackingKey == findTarget.value && it.presence == SignalPresence.RECENT }?.distanceClass ?: DistanceClass.UNKNOWN)
         // 설정 상태 확인은 1초에 한 번이면 충분하다.

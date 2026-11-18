@@ -73,7 +73,7 @@ class SignalGroupsTest {
         val snapshot = SignalSnapshot.capture("A", 1_000, false, tracker.snapshot(1_000, includeInactive = true))
         val baseline = baselineGroupCounts(snapshot)
         assertEquals(mapOf("WIFI:name:school" to 1, "WIFI:hidden" to 1), baseline)
-        // 같은 이름의 다른 주소(5GHz, 다른 층 공유기)와, 같은 공유기가 내는 이름 없는 주소 추가는 원래 있던 것이다.
+        // 같은 공유기가 내는 같은 이름의 다른 주소(5GHz)와 이름 없는 주소 추가는 원래 있던 것이다.
         wifi("10:00:00:00:00:03", 100_000, "SCHOOL"); wifi("10:00:00:00:00:04", 100_000, null); wifi("10:00:00:00:00:01", 100_000, "SCHOOL")
         fun now(nowMs: Long) = watchView(tracker.snapshot(nowMs, includeInactive = true), baseline, emptySet(), nowMs, baselineWifiAddresses(snapshot))
         assertEquals(0, now(101_000).count)
@@ -81,6 +81,45 @@ class SignalGroupsTest {
         val hotspot = now(131_000).wifi.single()
         assertTrue(hotspot.alert)
         assertEquals(0, hotspot.baselineCount)
+    }
+
+    @Test fun hotspotCopyingTheSchoolWifiNameIsFlagged() {
+        // 빈 교실: 학교 공유기(전 세계 등록 주소, 제조사 앞자리 00:1A:1E).
+        wifi("00:1a:1e:10:20:31", 0, "SCHOOL", rssi = -55)
+        val snapshot = SignalSnapshot.capture("A", 1_000, false, tracker.snapshot(1_000, includeInactive = true))
+        val baseline = baselineGroupCounts(snapshot)
+        val routers = baselineWifiAddresses(snapshot)
+        val vendors = baselineWifiVendors(snapshot)
+        assertEquals(mapOf("WIFI:name:school" to setOf("00:1A:1E")), vendors)
+        fun now(nowMs: Long, acknowledged: Set<String> = emptySet()) =
+            watchView(tracker.snapshot(nowMs, includeInactive = true), baseline, acknowledged, nowMs, routers, baselineVendors = vendors)
+
+        // 측정 때 못 잡은 옆 교실 공유기: 이름과 제조사 앞자리가 같으면 원래 있던 것이다.
+        wifi("00:1a:1e:77:88:91", 100_000, "SCHOOL", rssi = -70)
+        wifi("00:1a:1e:10:20:31", 100_000, "SCHOOL", rssi = -55)
+        assertEquals(0, now(101_000).count)
+
+        // 핫스팟 이름을 학교 와이파이와 똑같이(대소문자만 다르게) 바꿔도, 임의 주소이므로 바로 알린다.
+        wifi("da:a1:19:3b:7c:01", 130_000, "school", rssi = -45)
+        val flagged = now(131_000).wifi.single()
+        assertTrue(flagged.alert)
+        assertEquals(listOf("da:a1:19:3b:7c:01"), flagged.devices.map { it.key })
+        // 제조사가 다른 등록 주소(이름만 같은 다른 기기)도 알린다.
+        wifi("f0:99:bf:01:02:03", 130_000, "SCHOOL", rssi = -50)
+        assertEquals(setOf("da:a1:19:3b:7c:01", "f0:99:bf:01:02:03"), now(131_000).wifi.single().devices.map { it.key }.toSet())
+
+        // 하나를 확인함으로 빼도 그 주소만 빠진다. 학교 와이파이 이름 전체가 빠지지 않는다.
+        val hotspot = tracker.snapshot(131_000, includeInactive = true).first { it.key == "da:a1:19:3b:7c:01" }
+        val acknowledged = setOf(hotspot.acknowledgeKey)
+        assertEquals(listOf("f0:99:bf:01:02:03"), now(131_000, acknowledged).wifi.single().devices.map { it.key })
+        wifi("3e:55:01:9a:20:7f", 150_000, "SCHOOL", rssi = -52)
+        assertTrue(now(151_000, acknowledged).wifi.single().devices.any { it.key == "3e:55:01:9a:20:7f" })
+    }
+
+    @Test fun registeredVendorPrefixIgnoresRandomAddresses() {
+        assertEquals("00:1A:1E", registeredVendorPrefix("00:1a:1e:10:20:31"))
+        assertNull(registeredVendorPrefix("da:a1:19:3b:7c:01"))
+        assertNull(registeredVendorPrefix("not-an-address"))
     }
 
     @Test fun hiddenHotspotIsFlaggedEvenWhenTheEmptyRoomAlreadyHadAHiddenNetwork() {

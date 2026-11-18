@@ -31,12 +31,12 @@ fun advertisedName(address: String, name: String): String? {
 val TrackedDevice.groupKey: String get() = signalGroupKey(source, key, displayName, manufacturerIds, hints)
 
 /**
- * "확인함"으로 목록에서 뺄 때 쓰는 키. 보통은 묶음 키지만, 이름 숨김 와이파이는 서로 다른 기기가 한 묶음에 모이므로
- * 주소마다 따로 뺀다. 묶음째 빼면 숨김 와이파이 하나를 확인한 뒤 새로 켜진 다른 숨김 핫스팟까지 알리지 않게 된다.
+ * "확인함"으로 목록에서 뺄 때 쓰는 키. 블루투스는 주소가 바뀌므로 묶음 키를 쓴다. 와이파이는 주소가 바뀌지 않으므로
+ * 주소마다 따로 뺀다. 이름 숨김 와이파이나 학교 와이파이 이름을 흉내 낸 핫스팟은 서로 다른 기기가 한 묶음에 모이는데,
+ * 묶음째 빼면 하나를 확인한 뒤 새로 켜진 다른 핫스팟이나 원래 있던 공유기 이름 전체까지 알리지 않게 된다.
  */
-val TrackedDevice.acknowledgeKey: String get() = groupKey.let { group ->
-    if (group == HIDDEN_WIFI_KEY) "$HIDDEN_WIFI_KEY:${key.uppercase(Locale.ROOT)}" else group
-}
+val TrackedDevice.acknowledgeKey: String get() =
+    if (source == ScanSource.WIFI) "WIFI:address:${key.uppercase(Locale.ROOT)}" else groupKey
 val SnapshotSignal.groupKey: String get() = signalGroupKey(source, address, name, manufacturerIds, hints)
 
 /** 빈 교실 기록에서 묶음마다 동시에 몇 개였는지. 저장 순간 잡히지 않던 묶음은 1개로 친다. */
@@ -76,6 +76,24 @@ fun baselineWifiAddresses(baseline: SignalSnapshot): Set<String> =
     baseline.signals.filter { it.source == ScanSource.WIFI }.map { it.address.uppercase(Locale.ROOT) }.toSet()
 
 /**
+ * 주소의 제조사 앞자리(앞 세 자리). 제조사가 전 세계에 등록한 주소만 해당한다. 휴대폰 핫스팟이 흔히 쓰는
+ * 임의 주소(로컬 관리 비트가 켜진 주소)나 형식이 다른 주소는 제조사를 알 수 없으므로 null이다.
+ */
+fun registeredVendorPrefix(address: String): String? {
+    val candidate = address.uppercase(Locale.ROOT)
+    return candidate.take(8).takeIf { isLocallyAdministered(candidate) == false }
+}
+
+/**
+ * 빈 교실 기록의 와이파이 이름(묶음 키)마다, 그 이름을 낸 공유기 주소의 제조사 앞자리.
+ * 학교처럼 같은 이름의 공유기가 여러 대인 곳에서, 측정 때 못 잡은 다른 교실 공유기를 알아보는 데 쓴다.
+ */
+fun baselineWifiVendors(baseline: SignalSnapshot): Map<String, Set<String>> = baseline.signals
+    .filter { it.source == ScanSource.WIFI }
+    .mapNotNull { signal -> registeredVendorPrefix(signal.address)?.let { signal.groupKey to it } }
+    .groupBy({ it.first }, { it.second }).mapValues { (_, prefixes) -> prefixes.toSet() }
+
+/**
  * 공유기 한 대는 이름별·대역별로 주소를 여러 개 쓰는데, 이 주소들은 첫 자리나 끝 자리만 다르다.
  * 빈 교실 기록의 주소와 나머지 다섯 자리가 같으면 같은 공유기가 낸 것으로 본다.
  */
@@ -87,14 +105,14 @@ fun isSameAccessPoint(address: String, baselineWifi: Set<String>): Boolean {
 }
 
 fun watchView(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowledged: Set<String>, nowMs: Long, baselineWifi: Set<String> = emptySet(),
-    samples: List<SnapshotSignal> = emptyList()): WatchView {
+    samples: List<SnapshotSignal> = emptyList(), baselineVendors: Map<String, Set<String>> = emptyMap()): WatchView {
     val live = devices.filter { it.presence != SignalPresence.HISTORY }
     // 전원을 끈 아이폰과 에어태그가 내는 신호. 제출한 휴대폰 수만큼 잡힐 수 있어 알리지 않고 따로 센다.
     val (findMy, others) = live.partition { it.source == ScanSource.BLE && it.hints.primary == SignalHint.APPLE_FIND_MY }
     // 이름을 숨긴 것까지 포함해, 빈 교실에 있던 공유기가 뒤늦게 내보인 다른 주소는 원래 있던 것이다.
     val rest = others.filterNot { it.source == ScanSource.WIFI && isSameAccessPoint(it.key, baselineWifi) }
-        // 확인함으로 뺀 이름 숨김 와이파이는 그 주소만 뺀다.
-        .filterNot { it.groupKey == HIDDEN_WIFI_KEY && it.acknowledgeKey in acknowledged }
+        // 확인함으로 뺀 와이파이는 그 주소만 뺀다.
+        .filterNot { it.source == ScanSource.WIFI && it.acknowledgeKey in acknowledged }
     val flagged = mutableListOf<SignalGroup>()
     rest.groupBy { it.groupKey }.forEach { (key, members) ->
         val sorted = members.sortedByDescending { it.rssiEma ?: Double.NEGATIVE_INFINITY }
@@ -108,8 +126,11 @@ fun watchView(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowle
             // 이름을 숨긴 와이파이는 이름이 같다는 근거가 없다. 빈 교실 공유기의 주소는 위에서 이미 걸렀으므로
             // 남은 것은 모두 새 전파다. 주소가 바뀌지 않으므로 바로 알린다.
             wifi && key == HIDDEN_WIFI_KEY -> SignalGroup(key, sorted, 0, alert = true)
-            // 같은 이름의 와이파이는 주소가 몇 개든 원래 있던 것이다.
-            wifi -> null
+            // 이름이 같아도 이름은 누구나 똑같이 붙일 수 있다. 핫스팟 이름을 학교 와이파이와 같게 바꾸면 숨을 수 있으므로,
+            // 빈 교실에서 그 이름을 낸 공유기와 제조사 앞자리가 같은 주소만 원래 있던 것(같은 이름의 다른 교실 공유기)으로 본다.
+            // 제조사를 알 수 없는 임의 주소나 다른 제조사 주소는 새 전파로 바로 알린다.
+            wifi -> sorted.filter { device -> registeredVendorPrefix(device.key)?.let { it in baselineVendors[key].orEmpty() } != true }
+                .takeIf { it.isNotEmpty() }?.let { strangers -> SignalGroup(key, strangers, 0, alert = true) }
             established > before -> SignalGroup(key, sorted, before, alert = true)
             else -> null
         }
