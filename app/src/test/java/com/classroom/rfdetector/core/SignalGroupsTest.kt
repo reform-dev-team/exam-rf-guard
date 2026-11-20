@@ -34,6 +34,29 @@ class SignalGroupsTest {
         assertEquals(0, settled.count)
     }
 
+    @Test fun addressChangeJustBeforeSavingTheEmptyRoomIsNotCountedAsTwoDevices() {
+        // 한 대뿐인 기기가 빈 교실 기록을 저장하기 10초 전에 주소를 바꿨다. 옛 주소는 아직 "잡히는 중"으로 남아 있다.
+        (0..110).forEach { ble("AA:00:00:00:00:01", it * 1_000L) }
+        (111..120).forEach { ble("AA:00:00:00:00:02", it * 1_000L) }
+        val baseline = baselineAt(120_500)
+        assertEquals(mapOf("BLE:kind:76:APPLE_ACTIVE" to 1), baseline)
+        // 시험 중 같은 종류의 기기가 한 대 더 들어와 계속 잡히면 늘어난 것으로 알린다.
+        (600..660).forEach { ble("AA:00:00:00:00:02", it * 1_000L); ble("AA:00:00:00:00:09", it * 1_000L, rssi = -50) }
+        val group = view(baseline, 660_500).bluetooth.single()
+        assertEquals(1, group.baselineCount)
+        assertEquals(2, group.devices.size)
+    }
+
+    @Test fun quietAddressesWithoutANewAddressStillCountInTheEmptyRoom() {
+        // 두 대가 처음부터 있었고 한 대의 수신이 10초 끊겼을 뿐이다. 새 주소가 없으므로 두 대로 센다.
+        (0..120).forEach { ble("AA:00:00:00:00:01", it * 1_000L) }
+        (0..110).forEach { ble("AA:00:00:00:00:02", it * 1_000L) }
+        assertEquals(mapOf("BLE:kind:76:APPLE_ACTIVE" to 2), baselineAt(120_500))
+        // 측정 막바지에 새 기기가 들어왔지만 끊긴 주소가 없으면 그대로 더해 센다.
+        (100..120).forEach { ble("AA:00:00:00:00:02", it * 1_000L); ble("AA:00:00:00:00:03", it * 1_000L) }
+        assertEquals(mapOf("BLE:kind:76:APPLE_ACTIVE" to 3), baselineAt(120_500))
+    }
+
     @Test fun oneMoreDeviceOfTheSameKindIsFlaggedOnceItPersists() {
         ble("AA:00:00:00:00:01", 0); ble("AA:00:00:00:00:02", 0)
         val baseline = baselineAt(1_000)
