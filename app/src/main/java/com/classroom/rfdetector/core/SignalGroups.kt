@@ -8,6 +8,8 @@ const val ESTABLISHED_MS = 30_000L
 /** 이름을 숨긴 와이파이 전부가 공유하는 묶음 키. 이름이 같은 것이 아니므로 이름처럼 "원래 있던 것"으로 보면 안 된다. */
 const val HIDDEN_WIFI_KEY = "WIFI:hidden"
 
+const val LOCAL_ADDRESS_SUFFIX = ":local"
+
 /**
  * 주소 대신 쓰는 묶음 기준. 블루투스 주소는 10~15분마다 바뀌므로 기기가 알린 이름,
  * 이름이 없으면 회사 코드와 종류 단서로 묶는다. 와이파이는 이름으로 묶는다.
@@ -15,6 +17,8 @@ const val HIDDEN_WIFI_KEY = "WIFI:hidden"
 fun signalGroupKey(source: ScanSource, address: String, name: String, manufacturerIds: Set<Int>, hints: Set<SignalHint>): String {
     val advertised = advertisedName(address, name)
     return when {
+        advertised != null && source == ScanSource.WIFI && isLocallyAdministered(address) == true ->
+            "${source.name}:name:${advertised.lowercase(Locale.ROOT)}$LOCAL_ADDRESS_SUFFIX"
         advertised != null -> "${source.name}:name:${advertised.lowercase(Locale.ROOT)}"
         source == ScanSource.WIFI -> HIDDEN_WIFI_KEY
         manufacturerIds.isEmpty() && hints.isEmpty() -> "BLE:unknown"
@@ -44,7 +48,7 @@ fun baselineGroupCounts(baseline: SignalSnapshot): Map<String, Int> = baseline.s
     .mapValues { (_, signals) -> signals.count { it.presence != SignalPresence.HISTORY }.coerceAtLeast(1) }
 
 /** 지금 잡히는 한 묶음. devices는 센 순서다. */
-data class SignalGroup(val key: String, val devices: List<TrackedDevice>, val baselineCount: Int, val alert: Boolean) {
+data class SignalGroup(val key: String, val devices: List<TrackedDevice>, val baselineCount: Int, val alert: Boolean, val copiesEmptyRoomName: Boolean = false) {
     val strongest: TrackedDevice get() = devices.first()
 }
 
@@ -86,6 +90,15 @@ fun isSameAccessPoint(address: String, baselineWifi: Set<String>): Boolean {
     return baselineWifi.any { known -> known.length == 17 && (known.substring(3) == candidate.substring(3) || known.dropLast(2) == candidate.dropLast(2)) }
 }
 
+fun sharesVendorWithEmptyRoomRouter(device: TrackedDevice, baseline: Map<String, Int>, baselineWifi: Set<String>): Boolean {
+    if (device.source != ScanSource.WIFI) return false
+    val key = device.groupKey
+    if (!key.endsWith(LOCAL_ADDRESS_SUFFIX) || key.removeSuffix(LOCAL_ADDRESS_SUFFIX) !in baseline) return false
+    val candidate = device.key.uppercase(Locale.ROOT)
+    if (candidate.length != 17) return false
+    return baselineWifi.any { known -> isLocallyAdministered(known) == false && known.substring(3, 8) == candidate.substring(3, 8) }
+}
+
 fun watchView(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowledged: Set<String>, nowMs: Long, baselineWifi: Set<String> = emptySet(),
     samples: List<SnapshotSignal> = emptyList()): WatchView {
     val live = devices.filter { it.presence != SignalPresence.HISTORY }
@@ -93,6 +106,7 @@ fun watchView(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowle
     val (findMy, others) = live.partition { it.source == ScanSource.BLE && it.hints.primary == SignalHint.APPLE_FIND_MY }
     // 이름을 숨긴 것까지 포함해, 빈 교실에 있던 공유기가 뒤늦게 내보인 다른 주소는 원래 있던 것이다.
     val rest = others.filterNot { it.source == ScanSource.WIFI && isSameAccessPoint(it.key, baselineWifi) }
+        .filterNot { sharesVendorWithEmptyRoomRouter(it, baseline, baselineWifi) }
         // 확인함으로 뺀 이름 숨김 와이파이는 그 주소만 뺀다.
         .filterNot { it.groupKey == HIDDEN_WIFI_KEY && it.acknowledgeKey in acknowledged }
     val flagged = mutableListOf<SignalGroup>()
@@ -104,7 +118,8 @@ fun watchView(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowle
         val group = when {
             key in acknowledged -> null
             // 빈 교실에 없던 묶음은 바로 보인다. 와이파이 주소는 바뀌지 않으므로 바로 알린다.
-            before == 0 -> SignalGroup(key, sorted, 0, alert = wifi || established > 0)
+            before == 0 -> SignalGroup(key, sorted, 0, alert = wifi || established > 0,
+                copiesEmptyRoomName = wifi && key.endsWith(LOCAL_ADDRESS_SUFFIX) && key.removeSuffix(LOCAL_ADDRESS_SUFFIX) in baseline)
             // 이름을 숨긴 와이파이는 이름이 같다는 근거가 없다. 빈 교실 공유기의 주소는 위에서 이미 걸렀으므로
             // 남은 것은 모두 새 전파다. 주소가 바뀌지 않으므로 바로 알린다.
             wifi && key == HIDDEN_WIFI_KEY -> SignalGroup(key, sorted, 0, alert = true)
@@ -140,7 +155,7 @@ private fun knownGroups(devices: List<TrackedDevice>, baseline: Map<String, Int>
     }
     val fromEmptyRoom = samples.map { row(it.groupKey, it) }
     val recorded = samples.map { it.groupKey }.toSet()
-    val later = members.filter { (key, all) -> key !in recorded && (key in acknowledged || all.any { it.acknowledgeKey in acknowledged } || all.any { it.source == ScanSource.WIFI && isSameAccessPoint(it.key, baselineWifi) }) }
+    val later = members.filter { (key, all) -> key !in recorded && (key in acknowledged || all.any { it.acknowledgeKey in acknowledged } || all.any { it.source == ScanSource.WIFI && isSameAccessPoint(it.key, baselineWifi) } || all.any { sharesVendorWithEmptyRoomRouter(it, baseline, baselineWifi) }) }
         .entries.sortedWith(compareBy({ entry -> entry.value.minOf { it.firstSeenMs } }, { it.key })).map { row(it.key, null) }
     return fromEmptyRoom + later
 }
