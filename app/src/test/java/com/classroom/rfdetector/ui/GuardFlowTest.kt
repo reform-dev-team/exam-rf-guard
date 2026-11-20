@@ -142,6 +142,7 @@ class GuardFlowTest {
             compose.onNodeWithText("안내").performClick()
             compose.onNodeWithText("이 앱이 못 잡는 것").assertExists()
             compose.onNodeWithText("제대로 잡히는지 확인하기").assertExists()
+            compose.onNodeWithText("새 와이파이가 교실 기기의 것인지 확인하기").assertExists()
             saveScreen("guide")
             compose.onNodeWithContentDescription("돌아가기").performClick()
             compose.onNodeWithText("빈 교실 측정 시작").assertIsDisplayed()
