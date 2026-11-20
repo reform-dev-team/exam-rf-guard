@@ -4,8 +4,8 @@
 
 ## 빌드 환경
 
-- JDK 17 이상(검증에는 JDK 21 사용), Android SDK Platform 35와 Build Tools
-- 컴파일·대상 SDK 35, 최소 SDK 29(Android 10)
+- JDK 17 이상(검증에는 JDK 21 사용), Android SDK Platform 36과 Build Tools
+- 컴파일·대상 SDK 36, 최소 SDK 29(Android 10)
 - 도구 버전은 [버전 카탈로그](../gradle/libs.versions.toml)와 [wrapper 설정](../gradle/wrapper/gradle-wrapper.properties)에 고정돼 있습니다.
 
 프로젝트 루트의 `local.properties`에 SDK 경로를 지정합니다. Android Studio가 만들어 주기도 합니다. 이 파일은 Git에서 제외합니다.

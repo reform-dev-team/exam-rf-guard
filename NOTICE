@@ -6,12 +6,9 @@ code in this repository. It does not cover the items below, which remain under
 their owners' terms.
 
 App icon
-  The character is Koriyo, the mascot of Hwaseong City (Republic of Korea).
+  Adapted from Koriyo, the mascot of Hwaseong City (Republic of Korea).
   Original author: Hwaseong City. Used under the Korea Open Government License
   Type 1 (attribution): https://www.kogl.or.kr/info/licenseType1.do
-  The 3D artwork is adapted from a 3D-style rendition by KoriyoZIP
-  (https://koriyozip.com/ko/). It is not an official 3D asset of Hwaseong City.
-  Neither Hwaseong City nor KoriyoZIP made or endorses this app.
 
 Registry data shipped with the app (app/src/main/assets)
   mac-vendors.tsv: IEEE Registration Authority MA-L assignments.
