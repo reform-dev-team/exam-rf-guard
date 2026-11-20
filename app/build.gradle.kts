@@ -6,14 +6,14 @@ plugins {
 
 android {
     namespace = "com.classroom.rfdetector"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.classroom.rfdetector"
+        applicationId = "kr.reformparty.koriyoscan"
         minSdk = 29
-        targetSdk = 35
-        versionCode = 14
-        versionName = "1.0.1"
+        targetSdk = 36
+        versionCode = 16
+        versionName = "1.0.2"
     }
 
     // 정식 서명: 키 파일과 비밀번호는 저장소에 두지 않고 환경 변수로 받는다.
