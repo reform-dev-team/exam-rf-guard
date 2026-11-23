@@ -71,6 +71,8 @@ data class WatchView(
     val far: List<SignalGroup> = emptyList(),
     val findMy: List<TrackedDevice> = emptyList(),
     val knownGroups: List<KnownGroup> = emptyList(),
+    // RF-001: Informational review, not an automatic alert.
+    val sameNameWifi: List<TrackedDevice> = emptyList(),
 ) {
     val count: Int get() = wifi.size + bluetooth.size
 }
@@ -109,6 +111,17 @@ fun watchView(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowle
         .filterNot { sharesVendorWithEmptyRoomRouter(it, baseline, baselineWifi) }
         // 확인함으로 뺀 이름 숨김 와이파이는 그 주소만 뺀다.
         .filterNot { it.groupKey == HIDDEN_WIFI_KEY && it.acknowledgeKey in acknowledged }
+    // RF-001: Review distinct same-name BSSIDs after existing router exclusions.
+    val sameNameWifi = rest.filter { device ->
+        device.source == ScanSource.WIFI &&
+            device.groupKey != HIDDEN_WIFI_KEY &&
+            device.groupKey in baseline &&
+            device.groupKey !in acknowledged
+    }.sortedWith(
+        compareByDescending<TrackedDevice> {
+            it.rssiEma ?: Double.NEGATIVE_INFINITY
+        }.thenBy { it.trackingKey }
+    )
     val flagged = mutableListOf<SignalGroup>()
     rest.groupBy { it.groupKey }.forEach { (key, members) ->
         val sorted = members.sortedByDescending { it.rssiEma ?: Double.NEGATIVE_INFINITY }
@@ -138,6 +151,7 @@ fun watchView(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowle
         far = far,
         findMy = findMy,
         knownGroups = knownGroups(devices, baseline, acknowledged, baselineWifi, samples),
+        sameNameWifi = sameNameWifi,
     )
 }
 

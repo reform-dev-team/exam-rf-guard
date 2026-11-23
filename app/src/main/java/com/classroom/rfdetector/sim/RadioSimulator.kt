@@ -34,7 +34,25 @@ class RadioSimulator {
     private val rnd = Random()
 
     fun reset() {
-        devices.removeAll { it.key.startsWith("sim-extra-") }
+        devices.removeAll {
+            it.key.startsWith("sim-extra-") ||
+                it.key == "10:00:00:00:00:01" ||
+                it.key == "20:11:22:33:44:55"
+        }
+    }
+
+    fun addRf001BaselineWifi() {
+        if (devices.none { it.key == "10:00:00:00:00:01" }) {
+            devices.add(VDev("10:00:00:00:00:01", "SCHOOL", ScanSource.WIFI, false, 2.0, 2.0))
+        }
+    }
+
+    fun addSameNameWifiForRf001() {
+        if (devices.none { it.key == "20:11:22:33:44:55" }) {
+            devices.add(
+                VDev("20:11:22:33:44:55", "SCHOOL", ScanSource.WIFI, false, x = 1.0, y = 1.0)
+            )
+        }
     }
 
     fun addDevice() {

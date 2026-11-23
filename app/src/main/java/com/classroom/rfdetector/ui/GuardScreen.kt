@@ -65,6 +65,7 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
     var openGroup by remember { mutableStateOf<String?>(null) }
     var farOpen by rememberSaveable { mutableStateOf(false) }
     var findMyOpen by rememberSaveable { mutableStateOf(false) }
+    var sameNameOpen by rememberSaveable { mutableStateOf(false) }
     var knownOpen by rememberSaveable { mutableStateOf(false) }
     var confirmStop by remember { mutableStateOf(false) }
     var confirmRestart by remember { mutableStateOf(false) }
@@ -198,6 +199,28 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                             item { Text("전원을 끈 아이폰과 에어태그는 ‘나의 찾기’ 신호를 계속 냅니다. 꺼서 제출한 휴대폰도 여기에 잡히므로 알리지 않고 개수만 보여 줍니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall) }
                             items(watch.findMy, key = { "findmy-${it.trackingKey}" }) { device -> SignalCard(device) { onFind(device.trackingKey) } }
                         }
+                        // RF-001: Informational review only; not part of the alert count.
+                        if (watch.sameNameWifi.isNotEmpty()) {
+                            item {
+                                FoldRow("같은 이름의 새 와이파이 주소 ${watch.sameNameWifi.size}개 · 경보 아님", sameNameOpen) {
+                                    sameNameOpen = !sameNameOpen
+                                }
+                            }
+                            if (sameNameOpen) {
+                                item {
+                                    Text(
+                                        "빈 교실에서 관측한 와이파이와 이름은 같지만 주소가 다른 신호입니다. 동일 공유기의 다른 주소일 수 있으며 부정행위의 증거가 아닙니다.",
+                                        color = RfColors.textDim,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                                items(watch.sameNameWifi, key = { "same-name-${it.trackingKey}" }) { device ->
+                                    SignalCard(device, calm = true) {
+                                        onFind(device.trackingKey)
+                                    }
+                                }
+                            }
+                        }
                         item { FoldRow("원래 있던 전파 ${watch.knownGroups.size}종", knownOpen) { knownOpen = !knownOpen } }
                         if (knownOpen) {
                             item { Text("빈 교실 기록 순서대로 고정해 둔 목록입니다. 순서는 바뀌지 않고, 지금 잡히는지만 표시가 바뀝니다.", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall) }
@@ -260,6 +283,7 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
     // 새 전파로 올라온 것만 "확인함"으로 뺄 수 있다. 원래 있던 전파는 뺄 목록이 없다.
     val flaggedGroup = (watch.wifi + watch.bluetooth + watch.far).firstOrNull { it.key == device.groupKey }
     val flagged = flaggedGroup != null
+    val sameNameReview = watch.sameNameWifi.any { it.trackingKey == device.trackingKey }
     // 경보 목록에서 빠졌다는 것만으로 빈 교실 기록에 있었다고 판단할 수는 없다.
     val recordedInBaseline = baseline?.signals.orEmpty().any { signal ->
         radioKey(signal.source, signal.address) == device.trackingKey
@@ -275,6 +299,10 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
                         color = RfColors.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
+            if (sameNameReview) Text(
+                "빈 교실에서 관측한 와이파이와 이름은 같지만 주소가 다릅니다. 확인용 정보이며 경보가 아닙니다. 동일 공유기의 다른 주소일 수 있고, 부정행위의 증거가 아닙니다.",
+                color = RfColors.textDim
+            )
             if (flaggedGroup?.copiesEmptyRoomName == true) Text("빈 교실에 있던 와이파이와 이름이 같지만, 빈 교실의 그 와이파이와 달리 임의 주소를 씁니다. 휴대폰 핫스팟이 주로 이런 주소를 씁니다. 이름을 따라 지은 다른 기기일 수 있으니 확인하세요.", color = RfColors.warning)
             kindNote(device)?.let { Text(it) }
             GuardPanel {

@@ -51,6 +51,66 @@ class GuardFlowTest {
         waitForText("새 전파 1개 발견")
     }
 
+    @Test fun rf001SameSsidNewBssidIsInformationalReview() {
+        val vm = launch()
+        try {
+            compose.onNodeWithText("빈 교실 측정 시작").performClick()
+            compose.waitUntil(10_000) { vm.devices.value.size == 5 }
+
+            compose.runOnIdle {
+                vm.simAddRf001BaselineWifi()
+                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+            }
+            compose.waitUntil(10_000) {
+                vm.devices.value.any { it.key == "10:00:00:00:00:01" }
+            }
+
+            compose.onNodeWithText("빈 교실 기록 저장").performClick()
+            waitForText("새 전파 없음")
+
+            compose.runOnIdle {
+                vm.simAddSameNameWifiForRf001()
+                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+            }
+            compose.waitUntil(10_000) {
+                vm.watch.value.sameNameWifi.any {
+                    it.key == "20:11:22:33:44:55"
+                }
+            }
+
+            compose.runOnIdle {
+                assertEquals(0, vm.watch.value.count)
+                assertEquals(1, vm.watch.value.sameNameWifi.size)
+            }
+
+            compose.onNodeWithText("새 전파 없음").assertExists()
+            compose.onNodeWithText("같은 이름의 새 와이파이 주소 1개 · 경보 아님")
+                .assertExists()
+                .performClick()
+
+            compose.onNodeWithText(
+                "빈 교실에서 관측한 와이파이와 이름은 같지만 주소가 다른 신호입니다. 동일 공유기의 다른 주소일 수 있으며 부정행위의 증거가 아닙니다."
+            ).assertExists()
+
+            compose.onAllNodesWithText("SCHOOL", substring = true)
+                .onFirst()
+                .performClick()
+
+            compose.onNodeWithText(
+                "빈 교실에서 관측한 와이파이와 이름은 같지만 주소가 다릅니다. 확인용 정보이며 경보가 아닙니다. 동일 공유기의 다른 주소일 수 있고, 부정행위의 증거가 아닙니다."
+            ).assertExists()
+
+            compose.onNodeWithText("빈 교실 기록에 있던 전파")
+                .assertDoesNotExist()
+
+            compose.onNodeWithText("목록으로").performClick()
+            compose.onNodeWithText("같은 이름의 새 와이파이 주소 1개 · 경보 아님")
+                .assertExists()
+        } finally {
+            vm.shutdown()
+        }
+    }
+
     @Test fun proctorRecordsEmptyRoomThenSeesAndLocatesNewSignal() {
         val vm = launch()
         try {

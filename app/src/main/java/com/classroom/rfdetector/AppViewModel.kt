@@ -296,6 +296,14 @@ class AppViewModel(private val app: Context) : ViewModel() {
         resetBaseline()
     }
 
+    fun simAddRf001BaselineWifi() {
+        if (scanning.value && simMode.value) sim.addRf001BaselineWifi()
+    }
+
+    fun simAddSameNameWifiForRf001() {
+        if (scanning.value && simMode.value) sim.addSameNameWifiForRf001()
+    }
+
     fun simAddDevice() {
         if (scanning.value && simMode.value) sim.addDevice()
     }
